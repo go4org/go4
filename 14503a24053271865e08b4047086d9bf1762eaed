@@ -1,0 +1,8 @@
+Code-Review-1: Brad Fitzpatrick <brad@danga.com>
+Code-Review+2: <mathieu.lonjaret@gmail.com>
+Verified+1: <mathieu.lonjaret@gmail.com>
+Submitted-by: <mathieu.lonjaret@gmail.com>
+Submitted-at: Mon, 23 Nov 2015 22:00:18 +0100
+Reviewed-on: https://review.gerrithub.io/252858
+Project: camlistore/go4
+Branch: refs/heads/master

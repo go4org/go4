@@ -14,7 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package syncutil
+// Package syncdebug contains facilities for debugging synchronization
+// problems.
+package syncdebug
 
 import (
 	"bytes"
@@ -29,7 +31,7 @@ import (
 )
 
 // RWMutexTracker is a sync.RWMutex that tracks who owns the current
-// exclusive lock.  It's used for debugging deadlocks.
+// exclusive lock. It's used for debugging deadlocks.
 type RWMutexTracker struct {
 	mu sync.RWMutex
 
@@ -68,11 +70,16 @@ func putBuf(b []byte) {
 
 var goroutineSpace = []byte("goroutine ")
 
+// GoroutineID returns the current goroutine's ID.
+// Use of this function is almost always a terrible idea.
+// It is also very slow.
+// GoroutineID is intended only for debugging.
+// In particular, it is used by syncutil.
 func GoroutineID() int64 {
 	b := getBuf()
 	defer putBuf(b)
 	b = b[:runtime.Stack(b, false)]
-	// Parse the 4707 otu of "goroutine 4707 ["
+	// Parse the 4707 out of "goroutine 4707 ["
 	b = bytes.TrimPrefix(b, goroutineSpace)
 	i := bytes.IndexByte(b, ' ')
 	if i < 0 {

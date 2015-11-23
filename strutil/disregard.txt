@@ -1,3 +1,0 @@
-This file will be added in a github PR, to see if it then shows up in gerrithub.
-Added some more text and a git push -f to update the PR, and see if it gets updated in gerrithub.
-

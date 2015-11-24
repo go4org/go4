@@ -15,4 +15,4 @@ limitations under the License.
 */
 
 // Package syncutil contains synchronization utilities.
-package syncutil
+package syncutil // import "go4.org/syncutil"

@@ -1,0 +1,5 @@
+go_import_path: go4.org
+language: go
+go:
+  - 1.5
+  - tip

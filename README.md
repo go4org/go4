@@ -27,8 +27,16 @@ moving them here.
     API 100% correct in the first commit.
 
 * **code review** contributions must be code-reviewed. We're trying
-    out Gerrithub, to see if we can fix a mix of Github Pull Requests
+    out Gerrithub, to see if we can find a mix of Github Pull Requests
     and Gerrit that works well for many people. We'll see.
+
+* **CLA compliant** contributors must agree to the Google CLA (the
+    same as Go itself). This ensures we can move things into Go as
+    necessary in the future. It also makes lawyers at various
+    companies happy.  The CLA is **not** a copyright *assignment*; you
+    retain the copyright on your work. The CLA just says that your
+    work is open source and you have permission to open source it. See
+    https://golang.org/doc/contribute.html#tmp_6
 
 * **docs, tests, portability** all code should be documented in the
     normal Go style, have tests, and be portable to different

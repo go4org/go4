@@ -336,7 +336,7 @@ func (cl *cloudLaunch) createInstance() {
 			Items: []*compute.MetadataItems{
 				{
 					Key:   "user-data",
-					Value: cloudConfig, // when updated: googleapi.String(cloudConfig),
+					Value: googleapi.String(cloudConfig),
 				},
 			},
 		},

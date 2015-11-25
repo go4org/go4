@@ -46,5 +46,20 @@ moving them here.
 
 ## Contributing
 
-To add code to go4, send a pull reqeust or push a change to Gerrithub
+To add code to go4, send a pull request or push a change to Gerrithub.
+
+To push to Gerrithub:
+
+* Sign in to [http://gerrithub.io](http://gerrithub.io "Gerrithub") with your Github account.
+
+* git clone https://review.gerrithub.io/camlistore/go4
+
+* make changes
+
+* git push ssh://github_username@review.gerrithub.io:29418/camlistore/go4 HEAD:refs/for/branchname
+
+* Please file an issue, or contact the [Camlistore](https://groups.google.com/forum/#!forum/camlistore) mailing-list, or ping mpl directly for any problem with the above please.
+
+See [https://review.gerrithub.io/Documentation/user-upload.html](https://review.gerrithub.io/Documentation/user-upload.html) for more generic documentation.
+
 (TODO: more docs on Gerrit, integrate git-codereview?)

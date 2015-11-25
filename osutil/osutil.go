@@ -26,7 +26,7 @@ var execPath, execError = executable()
 // current process, but there is no guarantee that the path is still
 // pointing to the correct executable.
 //
-// OpenBSD and Darwin are currently unsupported.
+// OpenBSD is currently unsupported.
 func Executable() (string, error) {
 	return execPath, execError
 }

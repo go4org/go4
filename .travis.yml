@@ -3,3 +3,7 @@ language: go
 go:
   - 1.5
   - tip
+before_install:
+  - go get -u google.golang.org/cloud/storage
+  - cd $HOME/gopath/src/google.golang.org/cloud
+  - git reset --hard 975617b05ea8a58727e6c1a06b6161ff4185a9f2

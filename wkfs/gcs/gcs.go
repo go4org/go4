@@ -167,7 +167,17 @@ func (fs *gcsFS) OpenFile(name string, flag int, perm os.FileMode) (wkfs.FileWri
 		}
 	}
 	// TODO(mpl): consider adding perm to the object's ObjectAttrs.Metadata
-	return fs.sc.Bucket(bucket).Object(fileName).NewWriter(fs.ctx), nil
+	w := fs.sc.Bucket(bucket).Object(fileName).NewWriter(fs.ctx)
+	return writer{w, name}, nil
+}
+
+type writer struct {
+	*storage.Writer
+	name string
+}
+
+func (w writer) Name() string {
+	return w.name
 }
 
 type statInfo struct {

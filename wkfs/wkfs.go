@@ -46,6 +46,7 @@ type File interface {
 type FileWriter interface {
 	io.Writer
 	io.Closer
+	Name() string
 }
 
 func Open(name string) (File, error)               { return fs(name).Open(name) }

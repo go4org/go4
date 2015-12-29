@@ -58,29 +58,30 @@ func TestStringFromBytes(t *testing.T) {
 	}
 }
 
-func TestHasPrefixFold(t *testing.T) {
-	tests := []struct {
-		s, prefix string
-		result    bool
-	}{
-		{"camli", "CAML", true},
-		{"CAMLI", "caml", true},
-		{"cam", "Cam", true},
-		{"camli", "car", false},
-		{"caml", "camli", false},
-		{"Hello, 世界 dasdsa", "HeLlO, 世界", true},
-		{"Hello, 世界", "HeLlO, 世界-", false},
+var hasPrefixFoldTests = []struct {
+	s, prefix string
+	result    bool
+}{
+	{"camli", "CAML", true},
+	{"CAMLI", "caml", true},
+	{"cam", "Cam", true},
+	{"camli", "car", false},
+	{"caml", "camli", false},
+	{"Hello, 世界 dasdsa", "HeLlO, 世界", true},
+	{"Hello, 世界", "HeLlO, 世界-", false},
 
-		{"kelvin", "\u212A" + "elvin", true}, // "\u212A" is the Kelvin temperature sign
-		{"Kelvin", "\u212A" + "elvin", true},
-		{"kelvin", "\u212A" + "el", true},
-		{"Kelvin", "\u212A" + "el", true},
-		{"\u212A" + "elvin", "Kelvin", true},
-		{"\u212A" + "elvin", "kelvin", true},
-		{"\u212A" + "elvin", "Kel", true},
-		{"\u212A" + "elvin", "kel", true},
-	}
-	for _, tt := range tests {
+	{"kelvin", "\u212A" + "elvin", true}, // "\u212A" is the Kelvin temperature sign
+	{"Kelvin", "\u212A" + "elvin", true},
+	{"kelvin", "\u212A" + "el", true},
+	{"Kelvin", "\u212A" + "el", true},
+	{"\u212A" + "elvin", "Kelvin", true},
+	{"\u212A" + "elvin", "kelvin", true},
+	{"\u212A" + "elvin", "Kel", true},
+	{"\u212A" + "elvin", "kel", true},
+}
+
+func TestHasPrefixFold(t *testing.T) {
+	for _, tt := range hasPrefixFoldTests {
 		r := HasPrefixFold(tt.s, tt.prefix)
 		if r != tt.result {
 			t.Errorf("HasPrefixFold(%q, %q) returned %v", tt.s, tt.prefix, r)
@@ -117,53 +118,55 @@ func TestHasSuffixFold(t *testing.T) {
 	}
 }
 
-func TestContainsFold(t *testing.T) {
+var containsFoldTests = []struct {
+	s, substr string
+	result    bool
+}{
 	// TODO: more tests, more languages.
-	tests := []struct {
-		s, substr string
-		result    bool
-	}{
-		{"camli", "CAML", true},
-		{"CAMLI", "caml", true},
-		{"cam", "Cam", true},
-		{"мир", "ми", true},
-		{"МИP", "ми", true},
-		{"КАМЛИЙСТОР", "камлийс", true},
-		{"КаМлИйСтОр", "КаМлИйС", true},
-		{"camli", "car", false},
-		{"caml", "camli", false},
 
-		{"camli", "AMLI", true},
-		{"CAMLI", "amli", true},
-		{"mli", "MLI", true},
-		{"мир", "ир", true},
-		{"МИP", "ми", true},
-		{"КАМЛИЙСТОР", "лийстор", true},
-		{"КаМлИйСтОр", "лИйСтОр", true},
-		{"мир", "р", true},
-		{"camli", "ali", false},
-		{"amli", "camli", false},
+	{"camli", "CAML", true},
+	{"CAMLI", "caml", true},
+	{"cam", "Cam", true},
+	{"мир", "ми", true},
+	{"МИP", "ми", true},
+	{"КАМЛИЙСТОР", "камлийс", true},
+	{"КаМлИйСтОр", "КаМлИйС", true},
+	{"camli", "car", false},
+	{"caml", "camli", false},
 
-		{"МИP", "и", true},
-		{"мир", "и", true},
-		{"КАМЛИЙСТОР", "лийс", true},
-		{"КаМлИйСтОр", "лИйС", true},
+	{"camli", "AMLI", true},
+	{"CAMLI", "amli", true},
+	{"mli", "MLI", true},
+	{"мир", "ир", true},
+	{"МИP", "ми", true},
+	{"КАМЛИЙСТОР", "лийстор", true},
+	{"КаМлИйСтОр", "лИйСтОр", true},
+	{"мир", "р", true},
+	{"camli", "ali", false},
+	{"amli", "camli", false},
 
-		{"árvíztűrő tükörfúrógép", "árvíztŰrŐ", true},
-		{"I love ☕", "i love ☕", true},
+	{"МИP", "и", true},
+	{"мир", "и", true},
+	{"КАМЛИЙСТОР", "лийс", true},
+	{"КаМлИйСтОр", "лИйС", true},
 
-		{"k", "\u212A", true}, // "\u212A" is the Kelvin temperature sign
-		{"\u212A" + "elvin", "k", true},
-		{"kelvin", "\u212A" + "elvin", true},
-		{"Kelvin", "\u212A" + "elvin", true},
-		{"\u212A" + "elvin", "Kelvin", true},
-		{"\u212A" + "elvin", "kelvin", true},
-		{"273.15 kelvin", "\u212A" + "elvin", true},
-		{"273.15 Kelvin", "\u212A" + "elvin", true},
-		{"273.15 \u212A" + "elvin", "Kelvin", true},
-		{"273.15 \u212A" + "elvin", "kelvin", true},
-	}
-	for _, tt := range tests {
+	{"árvíztűrő tükörfúrógép", "árvíztŰrŐ", true},
+	{"I love ☕", "i love ☕", true},
+
+	{"k", "\u212A", true}, // "\u212A" is the Kelvin temperature sign
+	{"\u212A" + "elvin", "k", true},
+	{"kelvin", "\u212A" + "elvin", true},
+	{"Kelvin", "\u212A" + "elvin", true},
+	{"\u212A" + "elvin", "Kelvin", true},
+	{"\u212A" + "elvin", "kelvin", true},
+	{"273.15 kelvin", "\u212A" + "elvin", true},
+	{"273.15 Kelvin", "\u212A" + "elvin", true},
+	{"273.15 \u212A" + "elvin", "Kelvin", true},
+	{"273.15 \u212A" + "elvin", "kelvin", true},
+}
+
+func TestContainsFold(t *testing.T) {
+	for _, tt := range containsFoldTests {
 		r := ContainsFold(tt.s, tt.substr)
 		if r != tt.result {
 			t.Errorf("ContainsFold(%q, %q) returned %v", tt.s, tt.substr, r)

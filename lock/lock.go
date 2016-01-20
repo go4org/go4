@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// package lock is a file locking library.
+// Package lock is a file locking library.
 package lock
 
 import (
@@ -45,85 +45,107 @@ import (
 // On other operating systems, lock will fallback to using the presence and
 // content of a file named name + '.lock' to implement locking behavior.
 func Lock(name string) (io.Closer, error) {
-	return lockFn(name)
+	abs, err := filepath.Abs(name)
+	if err != nil {
+		return nil, err
+	}
+	lockmu.Lock()
+	defer lockmu.Unlock()
+	if locked[abs] {
+		return nil, fmt.Errorf("file %q already locked", abs)
+	}
+
+	c, err := lockFn(abs)
+	if err != nil {
+		return nil, fmt.Errorf("cannot acquire lock: %v", err)
+	}
+	locked[abs] = true
+	return c, nil
 }
 
 var lockFn = lockPortable
 
-// Portable version not using fcntl. Doesn't handle crashes as gracefully,
+// lockPortable is a portable version not using fcntl. Doesn't handle crashes as gracefully,
 // since it can leave stale lock files.
-// TODO: write pid of owner to lock file and on race see if pid is
-// still alive?
 func lockPortable(name string) (io.Closer, error) {
-	absName, err := filepath.Abs(name)
-	if err != nil {
-		return nil, fmt.Errorf("can't Lock file %q: can't find abs path: %v", name, err)
-	}
-	fi, err := os.Stat(absName)
+	fi, err := os.Stat(name)
 	if err == nil && fi.Size() > 0 {
-		if isStaleLock(absName) {
-			os.Remove(absName)
-		} else {
+		st := portableLockStatus(name)
+		switch st {
+		case statusLocked:
+			return nil, fmt.Errorf("file %q already lockedx", name)
+		case statusStale:
+			os.Remove(name)
+		case statusNonEmpty:
 			return nil, fmt.Errorf("can't Lock file %q: has non-zero size", name)
 		}
 	}
-	f, err := os.OpenFile(absName, os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_EXCL, 0666)
+	f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_EXCL, 0666)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create lock file %s %v", absName, err)
+		return nil, fmt.Errorf("failed to create lock file %s %v", name, err)
 	}
 	if err := json.NewEncoder(f).Encode(&pidLockMeta{OwnerPID: os.Getpid()}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot write owner pid: %v", err)
 	}
-	return &lockCloser{f: f, abs: absName}, nil
+	return &unlocker{f, name}, nil
 }
+
+type lockStatus int
+
+const (
+	statusLocked lockStatus = iota
+	statusUnlocked
+	statusStale
+	statusNonEmpty
+)
 
 type pidLockMeta struct {
 	OwnerPID int
 }
 
-func isStaleLock(path string) bool {
+func portableLockStatus(path string) lockStatus {
 	f, err := os.Open(path)
 	if err != nil {
-		return false
+		return statusUnlocked
 	}
 	defer f.Close()
 	var meta pidLockMeta
 	if json.NewDecoder(f).Decode(&meta) != nil {
-		return false
+		return statusNonEmpty
 	}
 	if meta.OwnerPID == 0 {
-		return false
+		return statusNonEmpty
 	}
 	p, err := os.FindProcess(meta.OwnerPID)
 	if err != nil {
 		// e.g. on Windows
-		return true
+		return statusStale
 	}
 	// On unix, os.FindProcess always is true, so we have to send
 	// it a signal to see if it's alive.
 	if signalZero != nil {
 		if p.Signal(signalZero) != nil {
-			return true
+			return statusStale
 		}
 	}
-	return false
+	return statusLocked
 }
 
 var signalZero os.Signal // nil or set by lock_sigzero.go
 
-type lockCloser struct {
+type portableLockCloser struct {
 	f    *os.File
 	abs  string
 	once sync.Once
 	err  error
 }
 
-func (lc *lockCloser) Close() error {
+func (lc *portableLockCloser) Close() error {
 	lc.once.Do(lc.close)
 	return lc.err
 }
 
-func (lc *lockCloser) close() {
+func (lc *portableLockCloser) close() {
 	if err := lc.f.Close(); err != nil {
 		lc.err = err
 	}
@@ -137,8 +159,7 @@ var (
 	locked = map[string]bool{} // abs path -> true
 )
 
-// unlocker is used by the darwin and linux implementations with fcntl
-// advisory locks.
+// unlocker is used by implementations with fcntl advisory locks.
 type unlocker struct {
 	f   *os.File
 	abs string

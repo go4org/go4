@@ -37,21 +37,19 @@ func lockFcntl(name string) (io.Closer, error) {
 	if err != nil {
 		return nil, err
 	}
-	lockmu.Lock()
-	if locked[abs] {
-		lockmu.Unlock()
+	if locked.testAndSet(abs) {
 		return nil, fmt.Errorf("file %q already locked", abs)
 	}
-	locked[abs] = true
-	lockmu.Unlock()
 
 	fi, err := os.Stat(name)
 	if err == nil && fi.Size() > 0 {
+		locked.clear(abs)
 		return nil, fmt.Errorf("can't Lock file %q: has non-zero size", name)
 	}
 
 	f, err := os.Create(name)
 	if err != nil {
+		locked.clear(abs)
 		return nil, fmt.Errorf("Lock Create of %s (abs: %s) failed: %v", name, abs, err)
 	}
 
@@ -74,6 +72,7 @@ func lockFcntl(name string) (io.Closer, error) {
 	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, f.Fd(), uintptr(syscall.F_SETLK), uintptr(unsafe.Pointer(&k)))
 	if errno != 0 {
 		f.Close()
+		locked.clear(abs)
 		return nil, errno
 	}
 	return &unlocker{f, abs}, nil

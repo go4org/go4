@@ -132,10 +132,27 @@ func (lc *lockCloser) close() {
 	}
 }
 
-var (
-	lockmu sync.Mutex
-	locked = map[string]bool{} // abs path -> true
-)
+type lockedRecord struct {
+	sync.Mutex
+	locked map[string]bool // abs path -> true
+}
+
+func (l *lockedRecord) testAndSet(path string) bool {
+	l.Lock()
+	defer l.Unlock()
+
+	old := l.locked[path]
+	l.locked[path] = true
+	return old
+}
+
+func (l *lockedRecord) clear(path string) {
+	l.Lock()
+	defer l.Unlock()
+	delete(l.locked, path)
+}
+
+var locked = lockedRecord{locked: map[string]bool{}}
 
 // unlocker is used by the darwin and linux implementations with fcntl
 // advisory locks.
@@ -145,7 +162,6 @@ type unlocker struct {
 }
 
 func (u *unlocker) Close() error {
-	lockmu.Lock()
 	// Remove is not necessary but it's nice for us to clean up.
 	// If we do do this, though, it needs to be before the
 	// u.f.Close below.
@@ -153,7 +169,6 @@ func (u *unlocker) Close() error {
 	if err := u.f.Close(); err != nil {
 		return err
 	}
-	delete(locked, u.abs)
-	lockmu.Unlock()
+	locked.clear(u.abs)
 	return nil
 }

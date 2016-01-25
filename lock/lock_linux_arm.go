@@ -64,5 +64,5 @@ func lockFcntl(name string) (io.Closer, error) {
 		f.Close()
 		return nil, errno
 	}
-	return &unlocker{f, name}, nil
+	return &unlocker{f: f, abs: name}, nil
 }

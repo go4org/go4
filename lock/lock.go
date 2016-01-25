@@ -73,11 +73,11 @@ func lockPortable(name string) (io.Closer, error) {
 		st := portableLockStatus(name)
 		switch st {
 		case statusLocked:
-			return nil, fmt.Errorf("file %q already lockedx", name)
+			return nil, fmt.Errorf("file %q already locked", name)
 		case statusStale:
 			os.Remove(name)
-		case statusNonEmpty:
-			return nil, fmt.Errorf("can't Lock file %q: has non-zero size", name)
+		case statusInvalid:
+			return nil, fmt.Errorf("can't Lock file %q: has invalid contents", name)
 		}
 	}
 	f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_EXCL, 0666)
@@ -87,7 +87,7 @@ func lockPortable(name string) (io.Closer, error) {
 	if err := json.NewEncoder(f).Encode(&pidLockMeta{OwnerPID: os.Getpid()}); err != nil {
 		return nil, fmt.Errorf("cannot write owner pid: %v", err)
 	}
-	return &unlocker{f, name}, nil
+	return &unlocker{f: f, abs: name}, nil
 }
 
 type lockStatus int
@@ -96,7 +96,7 @@ const (
 	statusLocked lockStatus = iota
 	statusUnlocked
 	statusStale
-	statusNonEmpty
+	statusInvalid
 )
 
 type pidLockMeta struct {
@@ -111,10 +111,10 @@ func portableLockStatus(path string) lockStatus {
 	defer f.Close()
 	var meta pidLockMeta
 	if json.NewDecoder(f).Decode(&meta) != nil {
-		return statusNonEmpty
+		return statusInvalid
 	}
 	if meta.OwnerPID == 0 {
-		return statusNonEmpty
+		return statusInvalid
 	}
 	p, err := os.FindProcess(meta.OwnerPID)
 	if err != nil {
@@ -133,27 +133,6 @@ func portableLockStatus(path string) lockStatus {
 
 var signalZero os.Signal // nil or set by lock_sigzero.go
 
-type portableLockCloser struct {
-	f    *os.File
-	abs  string
-	once sync.Once
-	err  error
-}
-
-func (lc *portableLockCloser) Close() error {
-	lc.once.Do(lc.close)
-	return lc.err
-}
-
-func (lc *portableLockCloser) close() {
-	if err := lc.f.Close(); err != nil {
-		lc.err = err
-	}
-	if err := os.Remove(lc.abs); err != nil {
-		lc.err = err
-	}
-}
-
 var (
 	lockmu sync.Mutex
 	locked = map[string]bool{} // abs path -> true
@@ -161,20 +140,41 @@ var (
 
 // unlocker is used by implementations with fcntl advisory locks.
 type unlocker struct {
-	f   *os.File
-	abs string
+	portable bool
+	f        *os.File
+	abs      string
+	once     sync.Once
+	err      error
 }
 
 func (u *unlocker) Close() error {
+	u.once.Do(u.close)
+	return u.err
+}
+
+func (u *unlocker) close() {
 	lockmu.Lock()
-	// Remove is not necessary but it's nice for us to clean up.
-	// If we do do this, though, it needs to be before the
-	// u.f.Close below.
-	os.Remove(u.abs)
-	if err := u.f.Close(); err != nil {
-		return err
-	}
 	delete(locked, u.abs)
+
+	if u.portable {
+		// In the portable lock implementation, it's
+		// important to close before removing because
+		// Windows won't allow us to remove an open
+		// file.
+		if err := u.f.Close(); err != nil {
+			u.err = err
+		}
+		if err := os.Remove(u.abs); err != nil {
+			u.err = err
+		}
+	} else {
+		// In other implementatioons, it's nice for us to clean up.
+		// If we do do this, though, it needs to be before the
+		// u.f.Close below.
+		os.Remove(u.abs)
+		if err := u.f.Close(); err != nil {
+			u.err = err
+		}
+	}
 	lockmu.Unlock()
-	return nil
 }

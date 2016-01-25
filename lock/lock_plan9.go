@@ -37,5 +37,5 @@ func lockPlan9(name string) (io.Closer, error) {
 		return nil, fmt.Errorf("Lock Create of %s failed: %v", name, err)
 	}
 
-	return &unlocker{f, name}, nil
+	return &unlocker{f: f, abs: name}, nil
 }

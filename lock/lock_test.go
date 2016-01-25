@@ -17,7 +17,10 @@ limitations under the License.
 package lock
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -46,18 +49,27 @@ func TestLockInChild(t *testing.T) {
 		lock = lockPortable
 	}
 
-	lk, err := lock(f)
-	if err != nil {
-		log.Fatalf("Lock failed: %v", err)
+	var lk io.Closer
+	for scan := bufio.NewScanner(os.Stdin); scan.Scan(); {
+		var err error
+		switch scan.Text() {
+		case "lock":
+			lk, err = lock(f)
+		case "unlock":
+			err = lk.Close()
+			lk = nil
+		case "exit":
+			// Simulate a crash, or at least not unlocking the lock.
+			os.Exit(0)
+		default:
+			err = fmt.Errorf("unexpected child command %q", scan.Text())
+		}
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			fmt.Println("")
+		}
 	}
-
-	if v, _ := strconv.ParseBool(os.Getenv("TEST_LOCK_CRASH")); v {
-		// Simulate a crash, or at least not unlocking the
-		// lock.  We still exit 0 just to simplify the parent
-		// process exec code.
-		os.Exit(0)
-	}
-	lk.Close()
 }
 
 func testLock(t *testing.T, portable bool) {
@@ -65,6 +77,7 @@ func testLock(t *testing.T, portable bool) {
 	if portable {
 		lock = lockPortable
 	}
+	t.Logf("test lock, portable %v", portable)
 
 	td, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -74,30 +87,31 @@ func testLock(t *testing.T, portable bool) {
 
 	path := filepath.Join(td, "foo.lock")
 
-	childLock := func(crash bool) error {
-		cmd := exec.Command(os.Args[0], "-test.run=LockInChild$")
-		cmd.Env = []string{"TEST_LOCK_FILE=" + path}
-		if portable {
-			cmd.Env = append(cmd.Env, "TEST_LOCK_PORTABLE=1")
-		}
-		if crash {
-			cmd.Env = append(cmd.Env, "TEST_LOCK_CRASH=1")
-		}
-		out, err := cmd.CombinedOutput()
-		t.Logf("Child output: %q (err %v)", out, err)
-		if err != nil {
-			return fmt.Errorf("Child Process lock of %s failed: %v %s", path, err, out)
-		}
-		return nil
+	child, err := startChild(path, portable)
+	if err != nil {
+		log.Fatalf("cannot start child: %v", err)
 	}
 
-	t.Logf("Locking in crashing child...")
-	if err := childLock(true); err != nil {
+	t.Logf("First lock in child")
+	if err := child.do("lock"); err != nil {
 		t.Fatalf("first lock in child process: %v", err)
 	}
 
+	t.Logf("Crash child")
+	if err := child.do("exit"); err != nil {
+		t.Fatalf("crash in child process: %v", err)
+	}
+
+	child, err = startChild(path, portable)
+	if err != nil {
+		log.Fatalf("cannot start child: %v", err)
+	}
+
 	t.Logf("Locking+unlocking in child...")
-	if err := childLock(false); err != nil {
+	if err := child.do("lock"); err != nil {
+		t.Fatalf("lock in child process after crashing child: %v", err)
+	}
+	if err := child.do("unlock"); err != nil {
 		t.Fatalf("lock in child process after crashing child: %v", err)
 	}
 
@@ -114,7 +128,7 @@ func testLock(t *testing.T, portable bool) {
 	}
 
 	t.Logf("Locking in child...")
-	if childLock(false) == nil {
+	if err := child.do("lock"); err == nil {
 		t.Fatalf("expected lock in child process to fail")
 	}
 
@@ -123,9 +137,81 @@ func testLock(t *testing.T, portable bool) {
 		t.Fatal(err)
 	}
 
+	t.Logf("Trying lock again in child...")
+	if err := child.do("lock"); err != nil {
+		t.Fatal(err)
+	}
+	if err := child.do("unlock"); err != nil {
+		t.Fatal(err)
+	}
+
 	lk3, err := lock(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	lk3.Close()
+}
+
+type childLockCmd struct {
+	op    string
+	reply chan<- error
+}
+
+type childCmd chan<- childLockCmd
+
+func (c childCmd) do(op string) error {
+	reply := make(chan error)
+	c <- childLockCmd{
+		op:    op,
+		reply: reply,
+	}
+	return <-reply
+}
+
+func startChild(path string, portable bool) (childCmd, error) {
+	cmd := exec.Command(os.Args[0], "-test.run=LockInChild$")
+	cmd.Env = []string{"TEST_LOCK_FILE=" + path}
+	toChild, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("cannot make pipe: %v", err)
+	}
+	fromChild, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("cannot make pipe: %v", err)
+	}
+	cmd.Stderr = os.Stderr
+	if portable {
+		cmd.Env = append(cmd.Env, "TEST_LOCK_PORTABLE=1")
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("cannot start child: %v", err)
+	}
+	cmdChan := make(chan childLockCmd)
+	go func() {
+		defer fromChild.Close()
+		defer toChild.Close()
+		inScan := bufio.NewScanner(fromChild)
+		for c := range cmdChan {
+			fmt.Fprintln(toChild, c.op)
+			ok := inScan.Scan()
+			if c.op == "exit" {
+				if ok {
+					c.reply <- errors.New("child did not exit")
+				} else {
+					cmd.Wait()
+					c.reply <- nil
+				}
+				break
+			}
+			if !ok {
+				panic("child exited early")
+			}
+			if errText := inScan.Text(); errText != "" {
+				c.reply <- errors.New(errText)
+			} else {
+				c.reply <- nil
+			}
+		}
+	}()
+	return cmdChan, nil
 }

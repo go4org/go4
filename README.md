@@ -54,6 +54,8 @@ To push to Gerrithub:
 
 * git clone https://review.gerrithub.io/camlistore/go4
 
+* curl https://camlistore.googlesource.com/camlistore/+/master/misc/commit-msg.githook -o go4/.git/hooks/commit-msg # needed for appending a gerrit Change-Id to your commit message.
+
 * make changes
 
 * git push ssh://github_username@review.gerrithub.io:29418/camlistore/go4 HEAD:refs/for/branchname

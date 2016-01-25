@@ -129,3 +129,35 @@ func testLock(t *testing.T, portable bool) {
 	}
 	lk3.Close()
 }
+
+func TestFailedLock(t *testing.T) {
+	td, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(td)
+
+	path := filepath.Join(td, "foo.lock")
+
+	// Write something to the file to let Lock() fail below.
+	if err := ioutil.WriteFile(path, []byte("foo"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = Lock(path)
+	if err == nil {
+		t.Fatalf("expected lock to fail")
+	}
+
+	if err := os.Truncate(path, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	lk, err := Lock(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := lk.Close(); err != nil {
+		t.Fatal(err)
+	}
+}

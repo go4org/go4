@@ -79,4 +79,5 @@ Install the git hook that adds the magic "Change-Id" line to your commit message
 
 See [https://review.gerrithub.io/Documentation/user-upload.html](https://review.gerrithub.io/Documentation/user-upload.html) for more generic documentation.
 
-(TODO: more docs on Gerrit, integrate git-codereview?)
+(TODO: more docs on Gerrit, integrate git-codereview, etc.)
+

@@ -51,21 +51,20 @@ To add code to go4, send a pull request or push a change to Gerrithub.
 We assume you already have your $GOPATH set and the go4 code cloned at
 $GOPATH/src/go4.org. For example:
 
-* git clone https://review.gerrithub.io/camlistore/go4 $GOPATH/src/go4.org
+<ul>
+<li><code>git clone https://review.gerrithub.io/camlistore/go4 $GOPATH/src/go4.org</code></li>
+</ul>
 
 ### To push a code review to Gerrithub directly:
 
-* Sign in to [http://gerrithub.io](http://gerrithub.io "Gerrithub") with your Github account.
-
-* Install the git hook that adds the magic "Change-Id" line to your commit messages:
-
-  curl -o $GOPATH/src/go4.org/.git/hooks/commit-msg https://camlistore.googlesource.com/camlistore/+/master/misc/commit-msg.githook
-
-* make changes
-
-* commit (the unit of code review is a single commit identified by the Change-ID, **NOT** a series of commits on a branch)
-
-* git push ssh://$YOUR_GITHUB_USERNAME@review.gerrithub.io:29418/camlistore/go4 HEAD:refs/for/master
+<ul>
+<li><p>Sign in to <a href="http://gerrithub.io" title="Gerrithub">http://gerrithub.io</a> with your Github account.</p></li>
+<li><p>Install the git hook that adds the magic "Change-Id" line to your commit messages:</p>
+<p><code>curl -o $GOPATH/src/go4.org/.git/hooks/commit-msg https://camlistore.googlesource.com/camlistore/+/master/misc/commit-msg.githook</code></p></li>
+<li><p>make changes</p></li>
+<li><p>commit (the unit of code review is a single commit identified by the Change-ID, <strong>NOT</strong> a series of commits on a branch)</p></li>
+<li><p><code>git push ssh://$YOUR<em>GITHUB</em>USERNAME@review.gerrithub.io:29418/camlistore/go4 HEAD:refs/for/master</code></p></li>
+</ul>
 
 ### Using Github Pull Requests
 

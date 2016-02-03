@@ -51,7 +51,7 @@ To add code to go4, send a pull request or push a change to Gerrithub.
 We assume you already have your $GOPATH set and the go4 code cloned at
 $GOPATH/src/go4.org. For example:
 
-* git clone https://review.gerrithub.io/camlistore/go4 $GOPATH/src/go4.org
+* `git clone https://review.gerrithub.io/camlistore/go4 $GOPATH/src/go4.org`
 
 ### To push a code review to Gerrithub directly:
 
@@ -59,13 +59,13 @@ $GOPATH/src/go4.org. For example:
 
 * Install the git hook that adds the magic "Change-Id" line to your commit messages:
 
-  curl -o $GOPATH/src/go4.org/.git/hooks/commit-msg https://camlistore.googlesource.com/camlistore/+/master/misc/commit-msg.githook
+  `curl -o $GOPATH/src/go4.org/.git/hooks/commit-msg https://camlistore.googlesource.com/camlistore/+/master/misc/commit-msg.githook`
 
 * make changes
 
 * commit (the unit of code review is a single commit identified by the Change-ID, **NOT** a series of commits on a branch)
 
-* git push ssh://$YOUR_GITHUB_USERNAME@review.gerrithub.io:29418/camlistore/go4 HEAD:refs/for/master
+* `git push ssh://$YOUR_GITHUB_USERNAME@review.gerrithub.io:29418/camlistore/go4 HEAD:refs/for/master`
 
 ### Using Github Pull Requests
 

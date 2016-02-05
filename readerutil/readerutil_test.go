@@ -36,4 +36,3 @@ func ExampleNewStatsReader() {
 	fmt.Printf("Read %s bytes\n", v.String())
 	// Output: Read 11 bytes
 }
-

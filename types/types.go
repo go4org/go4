@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-var null_b     = []byte("null")
+var null_b = []byte("null")
 
 // NopCloser is an io.Closer that does nothing.
 var NopCloser io.Closer = CloseFunc(func() error { return nil })

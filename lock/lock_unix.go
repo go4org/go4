@@ -1,4 +1,4 @@
-// +build linux,amd64
+// +build linux darwin freebsd openbsd netbsd dragonfly
 // +build !appengine
 
 /*
@@ -21,10 +21,9 @@ package lock
 
 import (
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io"
 	"os"
-	"syscall"
-	"unsafe"
 )
 
 func init() {
@@ -42,26 +41,17 @@ func lockFcntl(name string) (io.Closer, error) {
 		return nil, err
 	}
 
-	// This type matches C's "struct flock" defined in /usr/include/bits/fcntl.h.
-	// TODO: move this into the standard syscall package.
-	k := struct {
-		Type   uint32
-		Whence uint32
-		Start  uint64
-		Len    uint64
-		Pid    uint32
-	}{
-		Type:   syscall.F_WRLCK,
-		Whence: uint32(os.SEEK_SET),
+	err = unix.FcntlFlock(f.Fd(), unix.F_SETLK, &unix.Flock_t{
+		Type:   unix.F_WRLCK,
+		Whence: int16(os.SEEK_SET),
 		Start:  0,
 		Len:    0, // 0 means to lock the entire file.
-		Pid:    uint32(os.Getpid()),
-	}
+		Pid:    0, // only for F_GETLK
+	})
 
-	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, f.Fd(), uintptr(syscall.F_SETLK), uintptr(unsafe.Pointer(&k)))
-	if errno != 0 {
+	if err != nil {
 		f.Close()
-		return nil, errno
+		return nil, err
 	}
 	return &unlocker{f: f, abs: name}, nil
 }

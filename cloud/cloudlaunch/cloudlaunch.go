@@ -57,7 +57,7 @@ const baseConfig = `#cloud-config
 coreos:
   update:
     group: stable
-    reboot-strategy: off
+    reboot-strategy: $REBOOT
   units:
     - name: $NAME.service
       command: start
@@ -146,8 +146,17 @@ func strDefault(a, b string) string {
 }
 
 var (
-	doLaunch = flag.Bool("cloudlaunch", false, "Deploy or update this binary to the cloud. Must be on Linux, for now.")
+	doLaunch   = flag.Bool("cloudlaunch", false, "Deploy or update this binary to the cloud. Must be on Linux, for now.")
+	flagReboot = flag.String("update_strategy", "best-effort", "Automatic updates strategy. See https://coreos.com/os/docs/latest/update-strategies.html for possible values.")
 )
+
+func checkFlags() {
+	switch *flagReboot {
+	case "best-effort", "etcd-lock", "reboot", "off":
+	default:
+		log.Fatal(`Invalid update strategy. Accepted value is one of "best-effort", "etcd-lock", "reboot", "off".`)
+	}
+}
 
 func (c *Config) MaybeDeploy() {
 	flag.Parse()
@@ -160,6 +169,8 @@ func (c *Config) MaybeDeploy() {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		log.Fatal("Can only use --cloudlaunch on linux/amd64, for now.")
 	}
+
+	checkFlags()
 
 	if c.GCEProjectID == "" {
 		log.Fatal("cloudconfig.GCEProjectID is empty")
@@ -330,6 +341,7 @@ func (cl *cloudLaunch) createInstance() {
 	cloudConfig := strings.NewReplacer(
 		"$NAME", cl.Name,
 		"$URL", cl.binaryURL(),
+		"$REBOOT", *flagReboot,
 	).Replace(baseConfig)
 
 	instance := &compute.Instance{

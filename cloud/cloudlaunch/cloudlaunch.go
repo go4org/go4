@@ -57,7 +57,7 @@ const baseConfig = `#cloud-config
 coreos:
   update:
     group: stable
-    reboot-strategy: off
+    reboot-strategy: $REBOOT
   units:
     - name: $NAME.service
       command: start
@@ -98,6 +98,12 @@ type Config struct {
 	// on updates. The zero value means automatic.
 	RestartPolicy RestartPolicy
 
+	// UpdateStrategy sets the CoreOS automatic update strategy, and the
+	// associated reboots. Possible values are "best-effort", "etcd-lock",
+	// "reboot", "off", with "best-effort" being the default. See
+	// https://coreos.com/os/docs/latest/update-strategies.html
+	UpdateStrategy string
+
 	// BinaryBucket and BinaryObject are the GCS bucket and object
 	// within that bucket containing the Linux binary to download
 	// on boot and occasionally run. This binary must be public
@@ -126,10 +132,11 @@ func (c *Config) binaryURL() string {
 	return "https://storage.googleapis.com/" + c.BinaryBucket + "/" + c.binaryObject()
 }
 
-func (c *Config) instName() string     { return c.Name } // for now
-func (c *Config) zone() string         { return strDefault(c.Zone, "us-central1-f") }
-func (c *Config) machineType() string  { return strDefault(c.MachineType, "g1-small") }
-func (c *Config) binaryObject() string { return strDefault(c.BinaryObject, c.Name) }
+func (c *Config) instName() string       { return c.Name } // for now
+func (c *Config) zone() string           { return strDefault(c.Zone, "us-central1-f") }
+func (c *Config) machineType() string    { return strDefault(c.MachineType, "g1-small") }
+func (c *Config) binaryObject() string   { return strDefault(c.BinaryObject, c.Name) }
+func (c *Config) updateStrategy() string { return strDefault(c.UpdateStrategy, "best-effort") }
 
 func (c *Config) projectAPIURL() string {
 	return "https://www.googleapis.com/compute/v1/projects/" + c.GCEProjectID
@@ -330,6 +337,7 @@ func (cl *cloudLaunch) createInstance() {
 	cloudConfig := strings.NewReplacer(
 		"$NAME", cl.Name,
 		"$URL", cl.binaryURL(),
+		"$REBOOT", cl.updateStrategy(),
 	).Replace(baseConfig)
 
 	instance := &compute.Instance{

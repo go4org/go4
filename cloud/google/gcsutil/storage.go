@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package gcsutil provides tools for accessing Google Cloud Storage until they can be
 // completely replaced by google.golang.org/cloud/storage.
-package gcsutil
+package gcsutil // import "go4.org/cloud/google/gcsutil"
 
 import (
 	"encoding/xml"

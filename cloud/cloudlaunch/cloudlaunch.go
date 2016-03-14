@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package cloudlaunch helps binaries run themselves on The Cloud, copying
 // themselves to GCE.
-package cloudlaunch
+package cloudlaunch // import "go4.org/cloud/cloudlaunch"
 
 import (
 	"encoding/json"

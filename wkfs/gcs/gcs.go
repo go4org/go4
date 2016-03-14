@@ -20,7 +20,7 @@ limitations under the License.
 //
 // It was initially only meant for small files, and as such, it can only
 // read files smaller than 1MB for now.
-package gcs
+package gcs // import "go4.org/wkfs/gcs"
 
 import (
 	"bytes"

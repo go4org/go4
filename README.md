@@ -59,7 +59,7 @@ $GOPATH/src/go4.org. For example:
 
 * Install the git hook that adds the magic "Change-Id" line to your commit messages:
 
-  `curl -o $GOPATH/src/go4.org/.git/hooks/commit-msg https://camlistore.googlesource.com/camlistore/+/master/misc/commit-msg.githook`
+  `curl "https://camlistore.googlesource.com/camlistore/+/master/misc/commit-msg.githook?format=TEXT" | base64 -d > $GOPATH/src/go4.org/.git/hooks/commit-msg`
 
 * make changes
 

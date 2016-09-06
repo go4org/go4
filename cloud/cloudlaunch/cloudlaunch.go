@@ -35,14 +35,15 @@ import (
 
 	"go4.org/cloud/google/gceutil"
 
+	storage "cloud.google.com/go/storage"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	compute "google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/option"
 	storageapi "google.golang.org/api/storage/v1"
-	"google.golang.org/cloud"
-	"google.golang.org/cloud/storage"
+
 )
 
 func readFile(v string) string {
@@ -223,7 +224,7 @@ func (cl *cloudLaunch) uploadBinary() {
 	if cl.BinaryBucket == "" {
 		log.Fatal("cloudlaunch: Config.BinaryBucket is empty")
 	}
-	stoClient, err := storage.NewClient(ctx, cloud.WithBaseHTTP(cl.oauthClient))
+	stoClient, err := storage.NewClient(ctx, option.WithHTTPClient(cl.oauthClient))
 	if err != nil {
 		log.Fatal(err)
 	}

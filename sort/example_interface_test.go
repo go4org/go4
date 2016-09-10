@@ -6,7 +6,8 @@ package sort_test
 
 import (
 	"fmt"
-	"sort"
+
+	"go4.org/sort"
 )
 
 type Person struct {
@@ -26,7 +27,7 @@ func (a ByAge) Len() int           { return len(a) }
 func (a ByAge) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByAge) Less(i, j int) bool { return a[i].Age < a[j].Age }
 
-func Example() {
+func ExampleSort() {
 	people := []Person{
 		{"Bob", 31},
 		{"John", 42},

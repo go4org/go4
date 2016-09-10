@@ -270,8 +270,11 @@ func quickSort(data Interface, a, b, maxDepth int) {
 }
 
 // Sort sorts data.
+//
 // It makes one call to data.Len to determine n, and O(n*log(n)) calls to
 // data.Less and data.Swap. The sort is not guaranteed to be stable.
+//
+// To sort slices without creating a type, see Slice.
 func Sort(data Interface) {
 	n := data.Len()
 	if fs, ok := data.(*funcs); ok {

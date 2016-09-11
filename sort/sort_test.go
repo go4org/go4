@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"testing"
 
+	"go4.org/reflectutil"
 	. "go4.org/sort"
 )
 
@@ -87,7 +88,7 @@ func TestStrings(t *testing.T) {
 
 func TestStringsWithSwapper(t *testing.T) {
 	data := strings
-	With(len(data), reflect.Swapper(data[:]), func(i, j int) bool {
+	With(len(data), reflectutil.Swapper(data[:]), func(i, j int) bool {
 		return data[i] < data[j]
 	})
 	if !StringsAreSorted(data[:]) {
@@ -215,7 +216,7 @@ func BenchmarkSortString1K_WithSwapper(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		copy(data, unsorted)
 		b.StartTimer()
-		With(len(data), reflect.Swapper(data), func(i, j int) bool {
+		With(len(data), reflectutil.Swapper(data), func(i, j int) bool {
 			return data[i] < data[j]
 		})
 		b.StopTimer()
@@ -295,7 +296,7 @@ func BenchmarkStableInt1K_WithSwapper(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		copy(data, unsorted)
 		b.StartTimer()
-		Stable(MakeInterface(len(data), reflect.Swapper(data), func(i, j int) bool {
+		Stable(MakeInterface(len(data), reflectutil.Swapper(data), func(i, j int) bool {
 			return data[i] < data[j]
 		}))
 		b.StopTimer()

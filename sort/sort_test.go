@@ -18,7 +18,7 @@ import (
 
 var ints = [...]int{74, 59, 238, -784, 9845, 959, 905, 0, 0, 42, 7586, -5467984, 7586}
 var float64s = [...]float64{74.3, 59.0, math.Inf(1), 238.2, -784.0, 2.3, math.NaN(), math.NaN(), math.Inf(-1), 9845.768, -959.7485, 905, 7.8, 7.8}
-var strings = [...]string{"", "Hello", "foo", "bar", "foo", "f00", "%*&^*&^&", "***"}
+var someStrings = [...]string{"", "Hello", "foo", "bar", "foo", "f00", "%*&^*&^&", "***"}
 
 func TestSlice(t *testing.T) {
 	s := []int{5, 4, 3, 2, 1}
@@ -50,11 +50,11 @@ func TestSortFloat64Slice(t *testing.T) {
 }
 
 func TestSortStringSlice(t *testing.T) {
-	data := strings
+	data := someStrings
 	a := StringSlice(data[0:])
 	Sort(a)
 	if !IsSorted(a) {
-		t.Errorf("sorted %v", strings)
+		t.Errorf("sorted %v", someStrings)
 		t.Errorf("   got %v", data)
 	}
 }
@@ -78,21 +78,21 @@ func TestFloat64s(t *testing.T) {
 }
 
 func TestStrings(t *testing.T) {
-	data := strings
+	data := someStrings
 	Strings(data[0:])
 	if !StringsAreSorted(data[0:]) {
-		t.Errorf("sorted %v", strings)
+		t.Errorf("sorted %v", someStrings)
 		t.Errorf("   got %v", data)
 	}
 }
 
 func TestStringsWithSwapper(t *testing.T) {
-	data := strings
+	data := someStrings
 	With(len(data), reflectutil.Swapper(data[:]), func(i, j int) bool {
 		return data[i] < data[j]
 	})
 	if !StringsAreSorted(data[:]) {
-		t.Errorf("sorted %v", strings)
+		t.Errorf("sorted %v", someStrings)
 		t.Errorf("   got %v", data)
 	}
 }

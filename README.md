@@ -26,6 +26,12 @@ moving them here.
     means the bar for contributions is lower. We don't have to get the
     API 100% correct in the first commit.
 
+* **no Go version policy** as go4 primary user is Camlistore, and
+	Camlistore usually follows the latest Go stable version, go4 packages
+	are usually built and tested under the latest Go stable version too.
+	However, that is not a requirement, and the minimum compatible Go
+	version might even vary from one go4 package to another.
+
 * **code review** contributions must be code-reviewed. We're trying
     out Gerrithub, to see if we can find a mix of Github Pull Requests
     and Gerrit that works well for many people. We'll see.

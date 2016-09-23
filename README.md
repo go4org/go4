@@ -26,6 +26,11 @@ moving them here.
     means the bar for contributions is lower. We don't have to get the
     API 100% correct in the first commit.
 
+* **no Go version policy** go4 packages are usually built and tested
+    with the latest Go stable version. However, go4 has no overarching
+    version policy; each package can declare its own set of supported
+    Go versions.
+
 * **code review** contributions must be code-reviewed. We're trying
     out Gerrithub, to see if we can find a mix of Github Pull Requests
     and Gerrit that works well for many people. We'll see.

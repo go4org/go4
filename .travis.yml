@@ -6,5 +6,5 @@ go:
 before_install:
   - go get -u cloud.google.com/go/storage
   - cd $HOME/gopath/src/cloud.google.com/go
-  - git reset --hard a47b182e769f5e75f5fc927ff6ee2678f7f552cf
+  - git reset --hard 5aca3b7200b228d4b47e9e511f1d77ac270855ff
   - cd $HOME/gopath/src/go4.org

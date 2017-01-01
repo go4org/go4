@@ -49,11 +49,6 @@ func TestWriteRead(t *testing.T) {
 		t.Fatalf("unexpected bucket iteration error: %v", err)
 	}
 	filename := "camli-gcs_test.txt"
-	defer func() {
-		if err := cl.Bucket(*flagBucket).Object(filename).Delete(ctx); err != nil {
-			t.Fatalf("error while cleaning up: %v", err)
-		}
-	}()
 
 	// Write to camli-gcs_test.txt
 	gcsPath := "/gcs/" + *flagBucket + "/" + filename
@@ -74,12 +69,19 @@ func TestWriteRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error opening %v: %v", gcsPath, err)
 	}
-	defer g.Close()
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, g); err != nil {
 		t.Fatalf("error reading %v: %v", gcsPath, err)
 	}
 	if buf.String() != data {
 		t.Fatalf("error with %v contents: got %v, wanted %v", gcsPath, buf.String(), data)
+	}
+	if err := g.Close(); err != nil {
+		t.Fatalf("error closing %v: %v", gcsPath, err)
+	}
+
+	// Delete camli-gcs_test.txt
+	if err := wkfs.Remove(gcsPath); err != nil {
+		t.Fatalf("error deleting %v: %v", gcsPath, err)
 	}
 }

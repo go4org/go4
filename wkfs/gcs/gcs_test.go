@@ -50,7 +50,7 @@ func TestWriteRead(t *testing.T) {
 	}
 	filename := "camli-gcs_test.txt"
 	defer func() {
-		if err := cl.Bucket(*flagBucket).Object(filename).Delete(ctx); err != nil {
+		if err := wkfs.Remove(gcsPath); err != nil {
 			t.Fatalf("error while cleaning up: %v", err)
 		}
 	}()

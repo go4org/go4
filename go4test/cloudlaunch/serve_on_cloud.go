@@ -24,11 +24,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"path"
 	"regexp"
+	"strings"
 	"time"
 
 	"go4.org/cloud/cloudlaunch"
@@ -52,6 +54,24 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rc.Close()
 	http.ServeContent(w, r, r.URL.Path, time.Now(), rc)
+}
+
+// writeREADME creates a README file in the bucket, to test that wkfs write operation works.
+func writeREADME() error {
+	readme := "README"
+	rc, err := wkfs.Create(path.Join("/gcs", gcsBucket, "README"))
+	if err != nil {
+		return fmt.Errorf("could not create %v: %v", readme, err)
+	}
+	if _, err := io.Copy(rc,
+		strings.NewReader("The contents of this README are proof that wkfs.Create and wkfs.Write work")); err != nil {
+		rc.Close()
+		return fmt.Errorf("could not write to %v: %v", readme, err)
+	}
+	if err :=  rc.Close(); err != nil {
+		return fmt.Errorf("could not close %v: %v", readme, err)
+	}
+	return nil
 }
 
 func main() {
@@ -88,6 +108,10 @@ func main() {
 		log.Fatal("storage URL not found in cloud config")
 	}
 	gcsBucket = m[1]
+
+	if err := writeREADME(); err != nil {
+		log.Fatalf("Error writing README: %v", err)
+	}
 
 	http.HandleFunc("/", serveHTTP)
 

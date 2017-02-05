@@ -167,7 +167,7 @@ func (jc Obj) int(key string, def *int) int {
 		jc.appendError(fmt.Errorf("Missing required config key %q (integer)", key))
 		return 0
 	}
-	b, ok := ei.(float64)
+	b, ok := ei.(int)
 	if !ok {
 		jc.appendError(fmt.Errorf("Expected config key %q to be a number", key))
 		return 0
@@ -193,7 +193,7 @@ func (jc Obj) int64(key string, def *int64) int64 {
 		jc.appendError(fmt.Errorf("Missing required config key %q (integer)", key))
 		return 0
 	}
-	b, ok := ei.(float64)
+	b, ok := ei.(int64)
 	if !ok {
 		jc.appendError(fmt.Errorf("Expected config key %q to be a number", key))
 		return 0

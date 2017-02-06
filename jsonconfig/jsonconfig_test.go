@@ -93,6 +93,45 @@ func TestBoolEnvs(t *testing.T) {
 	}
 }
 
+var numbersWant = []struct {
+	key string
+	wantInt int
+	wantInt64 int64
+}{
+	{key: "isanint", wantInt: 3},
+	{key: "isanint64", wantInt64: 1152921504606846976},
+}
+
+func TestNumbers(t *testing.T) {
+	obj, err := ReadFile("testdata/numbers.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range numbersWant {
+		if tt.wantInt != 0 && tt.wantInt64 != 0 {
+			t.Fatalf("can't have both %v wantInt and %v wantInt64 in same test", tt.wantInt, tt.wantInt64)
+		}
+		if tt.wantInt == 0 && tt.wantInt64 == 0 {
+			t.Fatalf("can't have both wantInt and wantInt64 zero in test")
+		}
+		if tt.wantInt != 0 {
+			if v := obj.RequiredInt(tt.key); v != tt.wantInt {
+				t.Errorf("key %q = %v; want %v", tt.key, v, tt.wantInt)
+			}
+			continue		
+		}
+		if tt.wantInt64 != 0 {
+			if v := obj.RequiredInt64(tt.key); v != tt.wantInt64 {
+				t.Errorf("key %q = %v; want %v", tt.key, v, tt.wantInt64)
+			}
+			continue		
+		}
+	}
+	if err := obj.Validate(); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestListExpansion(t *testing.T) {
 	os.Setenv("TEST_BAR", "bar")
 	obj, err := ReadFile("testdata/listexpand.json")

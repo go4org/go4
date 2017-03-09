@@ -32,11 +32,22 @@ func (g *Gate) Start() {
 	g.c <- struct{}{}
 }
 
+// Try to start an operation, returning, whether there was room to start it.
+// If it returns true, then you need to call Done, so it is clear that more operations can be started.
+func (g *Gate) Try() bool {
+	select {
+	case g.c <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 // Done finishes an operation.
 func (g *Gate) Done() {
 	select {
 	case <-g.c:
 	default:
-		panic("Done called more than Start")
+		panic("Done called more than Start or Try")
 	}
 }

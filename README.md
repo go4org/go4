@@ -38,7 +38,7 @@ moving them here.
 * **CLA compliant** contributors must agree to the Google CLA (the
     same as Go itself). This ensures we can move things into Go as
     necessary in the future. It also makes lawyers at various
-    companies happy.  The CLA is **not** a copyright *assignment*; you
+    companies happy. The CLA is **not** a copyright *assignment*; you
     retain the copyright on your work. The CLA just says that your
     work is open source and you have permission to open source it. See
     https://golang.org/doc/contribute.html#tmp_6
@@ -85,4 +85,3 @@ $GOPATH/src/go4.org. For example:
 See [https://review.gerrithub.io/Documentation/user-upload.html](https://review.gerrithub.io/Documentation/user-upload.html) for more generic documentation.
 
 (TODO: more docs on Gerrit, integrate git-codereview, etc.)
-

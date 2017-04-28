@@ -61,10 +61,10 @@ func AppendSplitN(dst []string, s, sep string, n int) []string {
 	return genSplit(dst, s, sep, 0, n)
 }
 
-// equalFoldRune compares a and b runes whether they fold equally.
+// EqualFoldRune compares a and b runes whether they fold equally.
 //
 // The code comes from strings.EqualFold, but shortened to only one rune.
-func equalFoldRune(sr, tr rune) bool {
+func EqualFoldRune(sr, tr rune) bool {
 	if sr == tr {
 		return true
 	}
@@ -108,14 +108,14 @@ func HasPrefixFold(s, prefix string) bool {
 			return false
 		}
 		s = s[size:]
-		if !equalFoldRune(sr, pr) {
+		if !EqualFoldRune(sr, pr) {
 			return false
 		}
 	}
 	return true
 }
 
-// HasSuffixFold is like strings.HasPrefix but uses Unicode case-folding.
+// HasSuffixFold is like strings.HasSuffix but uses Unicode case-folding.
 func HasSuffixFold(s, suffix string) bool {
 	if suffix == "" {
 		return true
@@ -135,7 +135,7 @@ func HasSuffixFold(s, suffix string) bool {
 		}
 		so -= size
 
-		if !equalFoldRune(r, sr) {
+		if !EqualFoldRune(r, sr) {
 			return false
 		}
 	}
@@ -155,7 +155,7 @@ func ContainsFold(s, substr string) bool {
 		firstRune, _ = utf8.DecodeRuneInString(substr)
 	}
 	for i, rune := range s {
-		if equalFoldRune(rune, firstRune) && HasPrefixFold(s[i:], substr) {
+		if EqualFoldRune(rune, firstRune) && HasPrefixFold(s[i:], substr) {
 			return true
 		}
 	}

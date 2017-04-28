@@ -5,7 +5,7 @@
 [go4.org](http://go4.org) is a collection of packages for
 Go programmers.
 
-They started out living in [Camlistore](https://camlistore.org)'s repo
+A lot of this code used to live in [Camlistore](https://camlistore.org)'s repo
 and elsewhere but they have nothing to do with Camlistore, so we're
 moving them here.
 

@@ -29,7 +29,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -43,7 +42,6 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	storageapi "google.golang.org/api/storage/v1"
-
 )
 
 func readFile(v string) string {
@@ -165,10 +163,6 @@ func (c *Config) MaybeDeploy() {
 	}
 	defer os.Exit(1) // backup, in case we return without Fatal or os.Exit later
 
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		log.Fatal("Can only use --cloudlaunch on linux/amd64, for now.")
-	}
-
 	if c.GCEProjectID == "" {
 		log.Fatal("cloudconfig.GCEProjectID is empty")
 	}
@@ -273,10 +267,7 @@ func (cl *cloudLaunch) uploadBinary() {
 }
 
 func getSelfPath() string {
-	if runtime.GOOS != "linux" {
-		panic("TODO")
-	}
-	v, err := os.Readlink("/proc/self/exe")
+	v, err := os.Executable()
 	if err != nil {
 		log.Fatal(err)
 	}

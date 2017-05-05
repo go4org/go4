@@ -41,7 +41,7 @@ moving them here.
     companies happy.  The CLA is **not** a copyright *assignment*; you
     retain the copyright on your work. The CLA just says that your
     work is open source and you have permission to open source it. See
-    https://golang.org/doc/contribute.html#tmp_6
+    https://golang.org/doc/contribute.html#cla
 
 * **docs, tests, portability** all code should be documented in the
     normal Go style, have tests, and be portable to different

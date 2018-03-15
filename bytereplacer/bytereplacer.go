@@ -19,6 +19,8 @@ package bytereplacer // import "go4.org/bytereplacer"
 
 import "bytes"
 
+// this is a test.
+
 // Replacer replaces a list of strings with replacements.
 // It is safe for concurrent use by multiple goroutines.
 type Replacer struct {

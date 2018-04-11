@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Package reflectutil contains reflect utilities.
-package reflectutil
+package reflectutil // import "go4.org/reflectutil"
 
 import "reflect"
 

@@ -1,3 +1,24 @@
+/*
+Copyright 2018 The go4 Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// The dumpheif program dumps the structure and metadata of a HEIF file.
+//
+// It exists purely for debugging the go4.org/media/heif and
+// go4.org/media/heif/bmff packages; it makes no backwards
+// compatibility promises.
 package main
 
 import (
@@ -13,6 +34,7 @@ import (
 	"github.com/rwcarlsen/goexif/exif"
 	"github.com/rwcarlsen/goexif/tiff"
 
+	"go4.org/media/heif"
 	"go4.org/media/heif/bmff"
 )
 
@@ -23,11 +45,43 @@ var (
 
 func main() {
 	flag.Parse()
+	if flag.NArg() != 1 {
+		fmt.Fprintf(os.Stderr, "usage: dumpheif <file>\n")
+		os.Exit(1)
+	}
 	f, err := os.Open(flag.Arg(0))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer f.Close()
+
+	hf := heif.Open(f)
+
+	it, err := hf.PrimaryItem()
+	if err != nil {
+		log.Fatalf("PrimaryItem: %v", err)
+	}
+	fmt.Printf("primary item: %v\n", it.ID)
+
+	width, height, ok := it.SpatialExtents()
+	if ok {
+		fmt.Printf("spatial extents: %d x %d\n", width, height)
+	}
+
+	if ex, err := hf.EXIF(); err == nil {
+		fmt.Printf("EXIF dump:\n")
+		ex, err := exif.Decode(bytes.NewReader(ex))
+		if err != nil {
+			log.Fatalf("EXIF decode: %v", err)
+		}
+		ex.Walk(exifWalkFunc(func(name exif.FieldName, tag *tiff.Tag) error {
+			fmt.Printf("\t%v = %v\n", name, tag)
+			return nil
+		}))
+		fmt.Printf("\n")
+	}
+
+	fmt.Printf("BMFF boxes:\n")
 	r := bmff.NewReader(f)
 	for {
 		box, err := r.ReadBox()
@@ -40,24 +94,6 @@ func main() {
 		dumpBox(box, 0)
 	}
 
-	if len(exifLoc.Extents) == 1 {
-		ex0 := exifLoc.Extents[0]
-		exbuf := make([]byte, ex0.Length)
-		_, err := f.ReadAt(exbuf, int64(ex0.Offset)+4) // Why 4?
-		if err != nil {
-			log.Fatalf("reading EXIF: %v", err)
-		}
-		fmt.Printf("\nEXIF: %q\n", exbuf)
-		ex, err := exif.Decode(bytes.NewReader(exbuf))
-		if err != nil {
-			log.Fatalf("EXIF decode: %v", err)
-		}
-		ex.Walk(exifWalkFunc(func(name exif.FieldName, tag *tiff.Tag) error {
-			log.Printf(" tag %v = %v", name, tag)
-			return nil
-		}))
-
-	}
 }
 
 type exifWalkFunc func(exif.FieldName, *tiff.Tag) error

@@ -67,6 +67,13 @@ func main() {
 	if ok {
 		fmt.Printf("spatial extents: %d x %d\n", width, height)
 	}
+	fmt.Printf("properties:\n")
+	for _, prop := range it.Properties {
+		fmt.Printf("\t%q: %#v\n", prop.Type(), prop)
+	}
+	if len(it.Properties) == 0 {
+		fmt.Printf("\t(no properties)\n")
+	}
 
 	if ex, err := hf.EXIF(); err == nil {
 		fmt.Printf("EXIF dump:\n")

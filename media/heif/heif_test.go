@@ -79,6 +79,33 @@ func TestAll(t *testing.T) {
 	}
 }
 
+func TestRotations(t *testing.T) {
+	f, err := os.Open("testdata/rotate.heic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	h := Open(f)
+	it, err := h.PrimaryItem()
+	if err != nil {
+		t.Fatalf("PrimaryItem: %v", err)
+	}
+	if r := it.Rotations(); r != 3 {
+		t.Errorf("Rotations = %v; want %v", r, 3)
+	}
+	sw, sh, ok := it.SpatialExtents()
+	if !ok {
+		t.Fatalf("expected spatial extents")
+	}
+	vw, vh, ok := it.VisualDimensions()
+	if !ok {
+		t.Fatalf("expected visual dimensions")
+	}
+	if vw != sh || vh != sw {
+		t.Errorf("visual dimensions = %v, %v; want %v, %v", vw, vh, sh, sw)
+	}
+}
+
 type walkFunc func(exif.FieldName, *tiff.Tag) error
 
 func (f walkFunc) Walk(name exif.FieldName, tag *tiff.Tag) error {

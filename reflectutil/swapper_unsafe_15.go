@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // +build !go1.8
-// +build !ppc64,!ppc64le,!arm64,!mips,!mipsle,!mips64,!mips64le
+// +build !ppc64,!ppc64le,!arm64,!mips,!mipsle,!mips64,!mips64le,!s390x
 // +build go1.5,!js,!appengine,!safe
 
 package reflectutil

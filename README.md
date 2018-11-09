@@ -1,6 +1,6 @@
 # go4
 
-[![travis badge](https://travis-ci.org/camlistore/go4.svg?branch=master)](https://travis-ci.org/camlistore/go4 "Travis CI")
+[![travis badge](https://travis-ci.org/go4org/go4.svg?branch=master)](https://travis-ci.org/go4org/go4 "Travis CI")
 
 [go4.org](http://go4.org) is a collection of packages for
 Go programmers.

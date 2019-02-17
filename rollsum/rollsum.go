@@ -21,6 +21,10 @@ limitations under the License.
 // particular is at https://github.com/apenwarr/bup/blob/master/lib/bup/bupsplit.c
 package rollsum // import "go4.org/rollsum"
 
+import (
+	"math/bits"
+)
+
 const windowSize = 64 // Roll assumes windowSize is a power of 2
 const charOffset = 31
 
@@ -68,13 +72,8 @@ func (rs *RollSum) OnSplitWithBits(n uint32) bool {
 }
 
 func (rs *RollSum) Bits() int {
-	bits := blobBits
-	rsum := rs.Digest()
-	rsum >>= blobBits
-	for ; (rsum>>1)&1 != 0; bits++ {
-		rsum >>= 1
-	}
-	return bits
+	rsum := rs.Digest() >> (blobBits + 1)
+	return blobBits + bits.TrailingZeros32(^rsum)
 }
 
 func (rs *RollSum) Digest() uint32 {

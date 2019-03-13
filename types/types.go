@@ -107,7 +107,7 @@ func (t Time3339) Time() time.Time {
 	return time.Time(t)
 }
 
-// IsZero returns whether the time is Go zero or Unix zero.
+// IsAnyZero returns whether the time is Go zero or Unix zero.
 func (t *Time3339) IsAnyZero() bool {
 	return t == nil || time.Time(*t).IsZero() || time.Time(*t).Unix() == 0
 }

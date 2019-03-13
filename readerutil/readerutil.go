@@ -50,7 +50,7 @@ type varStatReader struct {
 	r io.Reader
 }
 
-// NewReaderStats returns an io.Reader that will have the number of bytes
+// NewStatsReader returns an io.Reader that will have the number of bytes
 // read from r added to v.
 func NewStatsReader(v *expvar.Int, r io.Reader) io.Reader {
 	return &varStatReader{v, r}
@@ -67,7 +67,7 @@ type varStatReadSeeker struct {
 	rs io.ReadSeeker
 }
 
-// NewReaderStats returns an io.ReadSeeker that will have the number of bytes
+// NewStatsReadSeeker returns an io.ReadSeeker that will have the number of bytes
 // read from rs added to v.
 func NewStatsReadSeeker(v *expvar.Int, rs io.ReadSeeker) io.ReadSeeker {
 	return &varStatReadSeeker{v, rs}

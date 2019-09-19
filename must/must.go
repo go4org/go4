@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package must contains helpers that panic on failure.
-package strutil // import "go4.org/must"
+package must // import "go4.org/must"
 
 import "io"
 

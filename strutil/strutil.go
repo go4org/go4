@@ -93,7 +93,8 @@ func equalFoldRune(sr, tr rune) bool {
 	return false
 }
 
-// HasPrefixFold is like strings.HasPrefix but uses Unicode case-folding.
+// HasPrefixFold is like strings.HasPrefix but uses Unicode case-folding,
+// matching case insensitively.
 func HasPrefixFold(s, prefix string) bool {
 	if prefix == "" {
 		return true
@@ -115,7 +116,8 @@ func HasPrefixFold(s, prefix string) bool {
 	return true
 }
 
-// HasSuffixFold is like strings.HasPrefix but uses Unicode case-folding.
+// HasSuffixFold is like strings.HasSuffix but uses Unicode case-folding,
+// matching case insensitively.
 func HasSuffixFold(s, suffix string) bool {
 	if suffix == "" {
 		return true

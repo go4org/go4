@@ -28,25 +28,40 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-// CoreOSImageURL returns the URL of the latest stable CoreOS image for running on Google Compute Engine.
+// CoreOSImageURL returns the URL of the latest stable CoreOS image for running
+// on Google Compute Engine.
 func CoreOSImageURL(cl *http.Client) (string, error) {
-	resp, err := cl.Get("https://www.googleapis.com/compute/v1/projects/coreos-cloud/global/images")
+	return osImageURL(cl, false)
+}
+
+// COSImageURL returns the URL of the latest stable Container-Optimized OS image
+// for running on Google Compute Engine.
+func COSImageURL(cl *http.Client) (string, error) {
+	return osImageURL(cl, true)
+}
+
+func osImageURL(cl *http.Client, cos bool) (string, error) {
+	project := "coreos-cloud"
+	if cos {
+		project = "cos-cloud"
+	}
+	resp, err := cl.Get("https://www.googleapis.com/compute/v1/projects/" + project + "/global/images")
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
-	type coreOSImage struct {
+	type osImage struct {
 		SelfLink          string
 		CreationTimestamp time.Time
 		Name              string
 	}
 
-	type coreOSImageList struct {
-		Items []coreOSImage
+	type osImageList struct {
+		Items []osImage
 	}
 
-	imageList := &coreOSImageList{}
+	imageList := &osImageList{}
 	if err := json.NewDecoder(resp.Body).Decode(imageList); err != nil {
 		return "", err
 	}
@@ -56,8 +71,12 @@ func CoreOSImageURL(cl *http.Client) (string, error) {
 
 	imageURL := ""
 	var max time.Time // latest stable image creation time
+	imgPrefix := "coreos-stable"
+	if cos {
+		imgPrefix = "cos-stable"
+	}
 	for _, v := range imageList.Items {
-		if !strings.HasPrefix(v.Name, "coreos-stable") {
+		if !strings.HasPrefix(v.Name, imgPrefix) {
 			continue
 		}
 		if v.CreationTimestamp.After(max) {
@@ -66,6 +85,9 @@ func CoreOSImageURL(cl *http.Client) (string, error) {
 		}
 	}
 	if imageURL == "" {
+		if cos {
+			return "", errors.New("no stable Container-Optimized OS image found")
+		}
 		return "", errors.New("no stable coreOS image found")
 	}
 	return imageURL, nil

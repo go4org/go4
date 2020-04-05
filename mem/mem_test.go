@@ -55,3 +55,16 @@ func TestRO(t *testing.T) {
 		t.Errorf("got %q; want %q", got, want)
 	}
 }
+
+func TestAllocs(t *testing.T) {
+	b := []byte("some memory.")
+	n := uint(testing.AllocsPerRun(5000, func() {
+		ro := B(b)
+		if ro.Len() != len(b) {
+			t.Fatal("wrong length")
+		}
+	}))
+	if n != 0 {
+		t.Errorf("unexpected allocs (%d)", n)
+	}
+}

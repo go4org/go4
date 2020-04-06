@@ -18,6 +18,7 @@ limitations under the License.
 package mem
 
 import (
+	"strconv"
 	"strings"
 	"unsafe"
 )
@@ -43,6 +44,13 @@ func (r RO) Equal(r2 RO) bool          { return r.m == r2.m }
 func (r RO) EqualString(s string) bool { return string(r.m) == s }
 func (r RO) EqualBytes(b []byte) bool  { return string(r.m) == string(b) }
 func (r RO) Reader() *Reader           { return &Reader{sr: strings.NewReader(string(r.m))} }
+
+func (r RO) ParseInt(base, bitSize int) (int64, error) {
+	return strconv.ParseInt(string(r.m), base, bitSize)
+}
+func (r RO) ParseUint(base, bitSize int) (uint64, error) {
+	return strconv.ParseUint(string(r.m), base, bitSize)
+}
 
 // Reader is like a bytes.Reader or strings.Reader.
 type Reader struct {

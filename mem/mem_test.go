@@ -68,3 +68,14 @@ func TestAllocs(t *testing.T) {
 		t.Errorf("unexpected allocs (%d)", n)
 	}
 }
+
+func TestStrconv(t *testing.T) {
+	b := []byte("1234")
+	i, err := B(b).ParseInt(10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i != 1234 {
+		t.Errorf("got %d; want 1234", i)
+	}
+}

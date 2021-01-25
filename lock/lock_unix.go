@@ -39,7 +39,7 @@ func lockFcntl(name string) (io.Closer, error) {
 
 	f, err := os.Create(name)
 	if err != nil {
-		return nil, fmt.Errorf("Lock Create of %s failed: %v", name, err)
+		return nil, fmt.Errorf("Lock Create of %q failed: %w", name, err)
 	}
 
 	err = unix.FcntlFlock(f.Fd(), unix.F_SETLK, &unix.Flock_t{
@@ -52,7 +52,7 @@ func lockFcntl(name string) (io.Closer, error) {
 
 	if err != nil {
 		f.Close()
-		return nil, fmt.Errorf("Lock FcntlFlock of %s failed: %v", name, err)
+		return nil, fmt.Errorf("Lock FcntlFlock of %q failed: %w", name, err)
 	}
 	return &unlocker{f: f, abs: name}, nil
 }

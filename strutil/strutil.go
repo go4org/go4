@@ -54,9 +54,10 @@ func genSplit(dst []string, s, sep string, sepSave, n int) []string {
 // AppendSplitN is like strings.SplitN but appends to and returns dst.
 // Unlike strings.SplitN, an empty separator is not supported.
 // The count n determines the number of substrings to return:
-//   n > 0: at most n substrings; the last substring will be the unsplit remainder.
-//   n == 0: the result is nil (zero substrings)
-//   n < 0: all substrings
+//
+//	n > 0: at most n substrings; the last substring will be the unsplit remainder.
+//	n == 0: the result is nil (zero substrings)
+//	n < 0: all substrings
 func AppendSplitN(dst []string, s, sep string, n int) []string {
 	return genSplit(dst, s, sep, 0, n)
 }
@@ -75,10 +76,7 @@ func equalFoldRune(sr, tr rune) bool {
 	// Fast check for ASCII.
 	if tr < utf8.RuneSelf && 'A' <= sr && sr <= 'Z' {
 		// ASCII, and sr is upper case.  tr must be lower case.
-		if tr == sr+'a'-'A' {
-			return true
-		}
-		return false
+		return tr == sr+'a'-'A'
 	}
 
 	// General case.  SimpleFold(x) returns the next equivalent rune > x
@@ -87,10 +85,7 @@ func equalFoldRune(sr, tr rune) bool {
 	for r != sr && r < tr {
 		r = unicode.SimpleFold(r)
 	}
-	if r == tr {
-		return true
-	}
-	return false
+	return r == tr
 }
 
 // HasPrefixFold is like strings.HasPrefix but uses Unicode case-folding,

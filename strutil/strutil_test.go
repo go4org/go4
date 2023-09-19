@@ -228,3 +228,21 @@ func BenchmarkHasPrefixFold(tb *testing.B) {
 		}
 	}
 }
+
+func BenchmarkContainsFoldToLower(tb *testing.B) {
+	a, b := "kamlistore", "AMLI"
+	for i := 0; i < tb.N; i++ {
+		if !strings.Contains(strings.ToLower(a), strings.ToLower(b)) {
+			tb.Fatalf("%q should have the substring %q", a, b)
+		}
+	}
+}
+
+func BenchmarkContainsFold(tb *testing.B) {
+	a, b := "kamlistore", "AMLI"
+	for i := 0; i < tb.N; i++ {
+		if !ContainsFold(a, b) {
+			tb.Fatalf("%q should have the substring %q", a, b)
+		}
+	}
+}

@@ -68,7 +68,7 @@ limitations under the License.
 //	functest.go:304: three: square(3) = 9; want 999
 //	FAIL
 //
-package functest
+package functest // import "go4.org/testing/functest"
 
 import (
 	"bytes"

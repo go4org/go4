@@ -19,7 +19,7 @@
 // Per Go's "no +1 policy", please only leave a comment on that issue
 // if you have something unique to add. Use Github's emoji reactions
 // otherwise.
-package sort
+package sort // import "go4.org/sort"
 
 import (
 	"reflect"

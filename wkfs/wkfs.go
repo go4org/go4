@@ -48,6 +48,10 @@ type FileWriter interface {
 	io.Closer
 }
 
+// Open opens the object designated by name, for reading and/or writing as a
+// file. The returned error can be checked with
+// https://golang.org/pkg/os/#IsNotExist to ascertain whether the object actually
+// exists.
 func Open(name string) (File, error)               { return fs(name).Open(name) }
 func Stat(name string) (os.FileInfo, error)        { return fs(name).Stat(name) }
 func Lstat(name string) (os.FileInfo, error)       { return fs(name).Lstat(name) }

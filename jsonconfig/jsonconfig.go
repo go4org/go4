@@ -19,6 +19,7 @@ limitations under the License.
 package jsonconfig // import "go4.org/jsonconfig"
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -286,12 +287,5 @@ func (jc Obj) Validate() error {
 		return nil
 	}
 	errList := ei.([]error)
-	if len(errList) == 1 {
-		return errList[0]
-	}
-	strs := make([]string, 0)
-	for _, v := range errList {
-		strs = append(strs, v.Error())
-	}
-	return fmt.Errorf("Multiple errors: " + strings.Join(strs, ", "))
+	return errors.Join(errList...)
 }

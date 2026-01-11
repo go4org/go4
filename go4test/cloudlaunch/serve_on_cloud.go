@@ -1,4 +1,4 @@
-// +build ignore
+//go:build ignore
 
 /*
 Copyright 2016 The Go4 Authors.
@@ -36,8 +36,8 @@ import (
 	_ "go4.org/wkfs/gcs"
 
 	"cloud.google.com/go/compute/metadata"
-	storageapi "google.golang.org/api/storage/v1"
 	compute "google.golang.org/api/compute/v1"
+	storageapi "google.golang.org/api/storage/v1"
 )
 
 var httpAddr = flag.String("http", ":80", "HTTP address")

@@ -1,5 +1,3 @@
-// +build go1.6
-
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -29,7 +27,7 @@ type multiSorter struct {
 // Sort sorts the argument slice according to the less functions passed to OrderedBy.
 func (ms *multiSorter) Sort(changes []Change) {
 	ms.changes = changes
-	sort.Sort(ms)
+	sort.Stable(ms)
 }
 
 // OrderedBy returns a Sorter that sorts using the less functions, in order.
@@ -127,7 +125,6 @@ func Example_sortMultiKeys() {
 	// By user: [{dmr C 100} {glenda Go 200} {gri Go 100} {gri Smalltalk 80} {ken C 150} {ken Go 200} {r Go 100} {r C 150} {rsc Go 200}]
 	// By user,<lines: [{dmr C 100} {glenda Go 200} {gri Smalltalk 80} {gri Go 100} {ken C 150} {ken Go 200} {r Go 100} {r C 150} {rsc Go 200}]
 	// By user,>lines: [{dmr C 100} {glenda Go 200} {gri Go 100} {gri Smalltalk 80} {ken Go 200} {ken C 150} {r C 150} {r Go 100} {rsc Go 200}]
-	// By language,<lines: [{dmr C 100} {ken C 150} {r C 150} {r Go 100} {gri Go 100} {ken Go 200} {glenda Go 200} {rsc Go 200} {gri Smalltalk 80}]
+	// By language,<lines: [{dmr C 100} {ken C 150} {r C 150} {gri Go 100} {r Go 100} {glenda Go 200} {ken Go 200} {rsc Go 200} {gri Smalltalk 80}]
 	// By language,<lines,user: [{dmr C 100} {ken C 150} {r C 150} {gri Go 100} {r Go 100} {glenda Go 200} {ken Go 200} {rsc Go 200} {gri Smalltalk 80}]
-
 }

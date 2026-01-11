@@ -1,5 +1,4 @@
-// +build !appengine
-// +build linux darwin freebsd openbsd netbsd dragonfly
+//go:build linux || darwin || freebsd || openbsd || netbsd || dragonfly || solaris
 
 /*
 Copyright 2013 The Go Authors

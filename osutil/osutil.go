@@ -17,16 +17,12 @@ limitations under the License.
 // Package osutil contains os level functions.
 package osutil // import "go4.org/osutil"
 
-// capture executable on package init to work around various os issues if
-// captured after executable has been renamed.
-var execPath, execError = executable()
+import "os" // capture executable on package init to work around various os issues if
 
-// Executable returns the path name for the executable that starts the
-// current process. The result is the path that was used to start the
-// current process, but there is no guarantee that the path is still
-// pointing to the correct executable.
+// Executable returns [os.Executable]. This function predates the Go standard
+// library's os.Executable and is retained here for compatibility.
 //
-// OpenBSD is currently unsupported.
+// Deprecated: use os.Executable directly instead.
 func Executable() (string, error) {
-	return execPath, execError
+	return os.Executable()
 }

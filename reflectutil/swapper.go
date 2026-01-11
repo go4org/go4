@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Package reflectutil contains a legacy Swapper function
+// that has since moved to the Go standard library.
 package reflectutil
 
 import "reflect"
@@ -15,10 +17,6 @@ import "reflect"
 //
 // Deprecated: this moved to the Go standard library. Use
 // reflect.Swapper in Go 1.8+ instead.
-func Swapper(slice interface{}) func(i, j int) {
-	v := reflect.ValueOf(slice)
-	if v.Kind() != reflect.Slice {
-		panic(&reflect.ValueError{Method: "reflectutil.Swapper", Kind: v.Kind()})
-	}
-	return swapper(v)
+func Swapper(slice any) func(i, j int) {
+	return reflect.Swapper(slice)
 }

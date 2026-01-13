@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	exifItemID uint16
+	exifItemID uint32
 	exifLoc    bmff.ItemLocationBoxEntry
 )
 
@@ -149,7 +149,7 @@ func dumpBox(box bmff.Box, depth int) {
 	case *bmff.ItemInfoEntry:
 		fmt.Printf("%s- %T, %+v\n", indent, v, v)
 		if v.ItemType == "Exif" {
-			exifItemID = v.ItemID
+			exifItemID = uint32(v.ItemID)
 		}
 	case *bmff.ItemPropertiesBox:
 		fmt.Printf("%s- %T\n", indent, v)
@@ -183,7 +183,7 @@ func dumpBox(box bmff.Box, depth int) {
 			dumpBox(child, depth+1)
 		}
 	case *bmff.ItemLocationBox:
-		fmt.Printf("%s- %T: %d items declared, %d parsed:\n", indent, v, v.ItemCount, len(v.Items))
+		fmt.Printf("%s- %T: version %d, %d items declared, %d parsed:\n", indent, v, v.Version, v.ItemCount, len(v.Items))
 		for _, lbe := range v.Items {
 			fmt.Printf("%s  %+v\n", indent, lbe)
 			if exifItemID != 0 && lbe.ItemID == exifItemID {

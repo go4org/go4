@@ -671,12 +671,12 @@ func parseImageSpatialExtentsProperty(outer *box, br *bufReader) (Box, error) {
 }
 
 type OffsetLength struct {
-	Offset, Length uint64
+	Index, Offset, Length uint64
 }
 
 // not a box
 type ItemLocationBoxEntry struct {
-	ItemID             uint16
+	ItemID             uint32
 	ConstructionMethod uint8 // actually uint4
 	DataReferenceIndex uint16
 	BaseOffset         uint64 // uint32 or uint64, depending on encoding
@@ -690,7 +690,7 @@ type ItemLocationBox struct {
 
 	offsetSize, lengthSize, baseOffsetSize, indexSize uint8 // actually uint4
 
-	ItemCount uint16
+	ItemCount uint32
 	Items     []ItemLocationBoxEntry
 }
 
@@ -699,39 +699,163 @@ func parseItemLocationBox(outer *box, br *bufReader) (Box, error) {
 	if err != nil {
 		return nil, err
 	}
+	if fb.Version > 2 {
+		return nil, fmt.Errorf("iloc version not supported: %d", fb.Version)
+	}
 	ilb := &ItemLocationBox{
 		FullBox: fb,
 	}
-	buf, err := br.Peek(4)
+	buf, err := br.Peek(2)
 	if err != nil {
 		return nil, err
 	}
 	ilb.offsetSize = buf[0] >> 4
 	ilb.lengthSize = buf[0] & 15
 	ilb.baseOffsetSize = buf[1] >> 4
-	if fb.Version > 0 { // version 1
+	switch fb.Version {
+	case 0:
+		ilb.indexSize = 0
+	case 1, 2:
 		ilb.indexSize = buf[1] & 15
+	default:
+		return nil, fmt.Errorf("iloc version not supported: %d", fb.Version)
 	}
-
-	ilb.ItemCount = binary.BigEndian.Uint16(buf[2:4])
-	br.Discard(4)
+	br.Discard(2)
+	switch fb.Version {
+	case 0, 1:
+		buf16, err := br.Peek(2)
+		if err != nil {
+			return nil, err
+		}
+		ilb.ItemCount = uint32(binary.BigEndian.Uint16(buf16))
+		br.Discard(2)
+	case 2:
+		buf32, err := br.Peek(4)
+		if err != nil {
+			return nil, err
+		}
+		ilb.ItemCount = binary.BigEndian.Uint32(buf32)
+		br.Discard(4)
+	default:
+		return nil, fmt.Errorf("iloc version not supported: %d", fb.Version)
+	}
 
 	for i := 0; br.ok() && i < int(ilb.ItemCount); i++ {
 		var ent ItemLocationBoxEntry
-		ent.ItemID, _ = br.readUint16()
-		if fb.Version > 0 { // version 1
+		switch fb.Version {
+		case 0, 1:
+			itemId16, _ := br.readUint16()
+			ent.ItemID = uint32(itemId16)
+		case 2:
+			ent.ItemID, _ = br.readUint32()
+		default:
+			return nil, fmt.Errorf("iloc version not supported: %d", fb.Version)
+		}
+		switch fb.Version {
+		case 0:
+			// Do Nothing as this field doesn't exist in V0 iloc
+		case 1, 2:
 			cmeth, _ := br.readUint16()
 			ent.ConstructionMethod = byte(cmeth & 15)
+		default:
+			return nil, fmt.Errorf("iloc version not supported: %d", fb.Version)
 		}
 		ent.DataReferenceIndex, _ = br.readUint16()
 		if br.ok() && ilb.baseOffsetSize > 0 {
-			br.Discard(int(ilb.baseOffsetSize) / 8)
+			// Only 0, 4 and 8 are valid as at 2025-01-18.
+			switch ilb.baseOffsetSize {
+			case 0:
+				// Do Nothing as there are zero bytes to read
+			case 4:
+				buf32, err := br.Peek(4)
+				if err != nil {
+					return nil, err
+				}
+				ent.BaseOffset = uint64(binary.BigEndian.Uint32(buf32))
+				br.Discard(4)
+			case 8:
+				buf64, err := br.Peek(8)
+				if err != nil {
+					return nil, err
+				}
+				ent.BaseOffset = binary.BigEndian.Uint64(buf64)
+				br.Discard(8)
+			default:
+				return nil, fmt.Errorf("baseOffsetSize not supported: %d", ilb.baseOffsetSize)
+			}
 		}
 		ent.ExtentCount, _ = br.readUint16()
 		for j := 0; br.ok() && j < int(ent.ExtentCount); j++ {
 			var ol OffsetLength
-			ol.Offset, _ = br.readUintN(ilb.offsetSize * 8)
-			ol.Length, _ = br.readUintN(ilb.lengthSize * 8)
+
+			switch fb.Version {
+			case 0:
+				// Do Nothing as this field doesn't exist in V0 iloc
+			case 1, 2:
+				switch ilb.indexSize {
+				case 0:
+					// Do Nothing as there are zero bytes to read
+				case 4:
+					buf32, err := br.Peek(4)
+					if err != nil {
+						return nil, err
+					}
+					ol.Index = uint64(binary.BigEndian.Uint32(buf32))
+					br.Discard(4)
+				case 8:
+					buf64, err := br.Peek(8)
+					if err != nil {
+						return nil, err
+					}
+					ol.Index = binary.BigEndian.Uint64(buf64)
+					br.Discard(8)
+				default:
+					return nil, fmt.Errorf("indexSize not supported: %d", ilb.indexSize)
+				}
+			default:
+				return nil, fmt.Errorf("iloc version not supported: %d", fb.Version)
+			}
+			switch ilb.offsetSize {
+			case 0:
+				// Do Nothing as there are zero bytes to read
+			case 4:
+				buf32, err := br.Peek(4)
+				if err != nil {
+					return nil, err
+				}
+				ol.Offset = uint64(binary.BigEndian.Uint32(buf32))
+				br.Discard(4)
+			case 8:
+				buf64, err := br.Peek(8)
+				if err != nil {
+					return nil, err
+				}
+				ol.Offset = binary.BigEndian.Uint64(buf64)
+				br.Discard(8)
+			default:
+				return nil, fmt.Errorf("offsetSize not supported: %d", ilb.offsetSize)
+			}
+			switch ilb.lengthSize {
+			case 0:
+				// Do Nothing as there are zero bytes to read
+			case 4:
+				buf32, err := br.Peek(4)
+				if err != nil {
+					return nil, err
+				}
+				ol.Length = uint64(binary.BigEndian.Uint32(buf32))
+				br.Discard(4)
+			case 8:
+				buf64, err := br.Peek(8)
+				if err != nil {
+					return nil, err
+				}
+				ol.Length = binary.BigEndian.Uint64(buf64)
+				br.Discard(8)
+			default:
+				return nil, fmt.Errorf("lengthSize not supported: %d", ilb.lengthSize)
+			}
+
 			if br.err != nil {
 				return nil, br.err
 			}

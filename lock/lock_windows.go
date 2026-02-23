@@ -54,12 +54,12 @@ func (u *winUnlocker) close() {
 func lockWindows(name string) (io.Closer, error) {
 	fi, err := os.Stat(name)
 	if err == nil && fi.Size() > 0 {
-		return nil, fmt.Errorf("can't lock file %q: %s", name, "has non-zero size")
+		return nil, fmt.Errorf("can't lock file %q: has non-zero size", name)
 	}
 
 	handle, err := winCreateEphemeral(name)
 	if err != nil {
-		return nil, fmt.Errorf("creation of lock %s failed: %v", name, err)
+		return nil, fmt.Errorf("creation of lock %q failed: %w", name, err)
 	}
 
 	return &winUnlocker{h: handle, abs: name}, nil
@@ -70,9 +70,5 @@ func winCreateEphemeral(name string) (windows.Handle, error) {
 		FILE_ATTRIBUTE_TEMPORARY  = 0x100
 		FILE_FLAG_DELETE_ON_CLOSE = 0x04000000
 	)
-	handle, err := windows.CreateFile(windows.StringToUTF16Ptr(name), 0, 0, nil, windows.OPEN_ALWAYS, FILE_ATTRIBUTE_TEMPORARY|FILE_FLAG_DELETE_ON_CLOSE, 0)
-	if err != nil {
-		return 0, err
-	}
-	return handle, nil
+	return windows.CreateFile(windows.StringToUTF16Ptr(name), 0, 0, nil, windows.OPEN_ALWAYS, FILE_ATTRIBUTE_TEMPORARY|FILE_FLAG_DELETE_ON_CLOSE, 0)
 }

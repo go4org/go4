@@ -57,7 +57,7 @@ func Lock(name string) (io.Closer, error) {
 
 	c, err := lockFn(abs)
 	if err != nil {
-		return nil, fmt.Errorf("cannot acquire lock: %v", err)
+		return nil, fmt.Errorf("cannot acquire lock: %w", err)
 	}
 	locked[abs] = true
 	return c, nil
@@ -82,10 +82,10 @@ func lockPortable(name string) (io.Closer, error) {
 	}
 	f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_EXCL, 0666)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create lock file %s %v", name, err)
+		return nil, fmt.Errorf("failed to create lock file %q: %w", name, err)
 	}
 	if err := json.NewEncoder(f).Encode(&pidLockMeta{OwnerPID: os.Getpid()}); err != nil {
-		return nil, fmt.Errorf("cannot write owner pid: %v", err)
+		return nil, fmt.Errorf("cannot write owner pid: %w", err)
 	}
 	return &unlocker{
 		f:        f,
@@ -178,7 +178,7 @@ func (u *unlocker) close() {
 		}
 		return
 	}
-	// In other implementatioons, it's nice for us to clean up.
+	// In other implementations, it's nice for us to clean up.
 	// If we do do this, though, it needs to be before the
 	// u.f.Close below.
 	os.Remove(u.abs)

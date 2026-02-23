@@ -34,7 +34,7 @@ func lockPlan9(name string) (io.Closer, error) {
 
 	f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE, os.ModeExclusive|0644)
 	if err != nil {
-		return nil, fmt.Errorf("Lock Create of %s failed: %v", name, err)
+		return nil, fmt.Errorf("Lock Create of %q failed: %w", name, err)
 	}
 
 	return &unlocker{f: f, abs: name}, nil

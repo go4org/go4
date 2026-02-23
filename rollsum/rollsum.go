@@ -22,6 +22,7 @@ limitations under the License.
 package rollsum // import "go4.org/rollsum"
 
 import (
+	"bufio"
 	"math/bits"
 )
 
@@ -78,4 +79,45 @@ func (rs *RollSum) Bits() int {
 
 func (rs *RollSum) Digest() uint32 {
 	return (rs.s1 << 16) | (rs.s2 & 0xffff)
+}
+
+// SplitFunc returns a function suitable for use with bufio.Scanner.
+// It uses a RollSum to tokenize an input stream.
+func SplitFunc() bufio.SplitFunc {
+	rs := New()
+	split := rs.OnSplit
+	return makeSplitFunc(rs, split)
+}
+
+// SplitFunc returns a function suitable for use with bufio.Scanner.
+// It uses a RollSum's OnSplitWithBits to tokenize an input stream.
+func SplitFuncWithBits(n uint32) bufio.SplitFunc {
+	rs := New()
+	split := func() bool { return rs.OnSplitWithBits(n) }
+	return makeSplitFunc(rs, split)
+}
+
+func makeSplitFunc(rs *RollSum, split func() bool) bufio.SplitFunc {
+	return func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+		// Make a copy of rs in case we don't find a split.
+		// In that case, we have to go ask for more data,
+		// so we need to be able to restore rs to its original state.
+		cp := *rs
+		for i, b := range data {
+			rs.Roll(b)
+			if i > 0 && split() {
+				return i, data[:i], nil
+			}
+		}
+		if atEOF {
+			// No more data coming; return what we were given.
+			return len(data), data, nil
+		}
+		// Restore rs and ask for more data.
+		*rs = cp
+		return 0, nil, nil
+	}
 }

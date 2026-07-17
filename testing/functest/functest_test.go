@@ -111,7 +111,7 @@ func TestPanic(t *testing.T) {
 		f.Case("panic with nil").In(true, nil),
 	)
 	want := `LOG: Got res: {Result:[] Panic:boom Panicked:true}
-ERR: panic with nil: condPanic(true, <nil>): panicked with panic called with nil argument
+ERR: panic with nil: condPanic(true, <nil>): panicked with <nil>
 `
 	if got := trec.String(); got != want {
 		t.Errorf("Output mismatch.\nGot:\n%v\nWant:\n%v\n", got, want)

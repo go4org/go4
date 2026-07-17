@@ -212,7 +212,12 @@ func (f *Func) Test(t testing.TB, cases ...*Case) {
 }
 
 func (f *Func) checkCall(in []reflect.Value) (out []reflect.Value, didPanic bool, panicValue interface{}) {
-	defer func() { panicValue = recover() }()
+	defer func() {
+		panicValue = recover()
+		if _, ok := panicValue.(*runtime.PanicNilError); ok {
+			panicValue = nil
+		}
+	}()
 	didPanic = true
 	out = f.fv.Call(in)
 	didPanic = false

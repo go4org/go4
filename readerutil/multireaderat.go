@@ -69,6 +69,11 @@ func (m *multiRA) ReadAt(p []byte, off int64) (n int, err error) {
 	for len(parts) > 0 && len(p) > 0 {
 		readP := p
 		partSize := parts[0].Size()
+		// Skip empty parts, which may return io.EOF even for an empty read.
+		if partSize == 0 {
+			parts = parts[1:]
+			continue
+		}
 		if int64(len(readP)) > partSize-needSkip {
 			readP = readP[:partSize-needSkip]
 		}

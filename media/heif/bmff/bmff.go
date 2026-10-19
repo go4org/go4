@@ -14,11 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package bmff reads ISO BMFF boxes, as used by HEIF, etc.
+// Package bmff reads ISO BMFF boxes, as used by HEIF, MP4, QuickTime, etc.
 //
 // This is not so much as a generic BMFF reader as it is a BMFF reader
-// as needed by HEIF, though that may change in time. For now, only
-// boxes necessary for the go4.org/media/heif package have explicit
+// as needed by its users. Only boxes necessary for the go4.org/media/heif
+// package and for reading QuickTime-style ("mdta") metadata have explicit
 // parsers.
 //
 // This package makes no API compatibility promises; it exists
@@ -32,22 +32,29 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 )
 
+// NewReader returns a Reader that reads boxes from r.
+//
+// If r implements io.Seeker (and is not a *bufio.Reader), the Reader
+// seeks past the unread remainder of boxes instead of reading it, which
+// matters for files with large media data boxes.
 func NewReader(r io.Reader) *Reader {
-	br, ok := r.(*bufio.Reader)
-	if !ok {
-		br = bufio.NewReader(r)
+	if br, ok := r.(*bufio.Reader); ok {
+		return &Reader{br: bufReader{Reader: br}}
 	}
-	return &Reader{br: bufReader{Reader: br}}
+	seeker, _ := r.(io.Seeker)
+	return &Reader{br: bufReader{Reader: bufio.NewReader(r)}, src: r, seeker: seeker}
 }
 
 type Reader struct {
 	br          bufReader
-	lastBox     Box  // or nil
-	noMoreBoxes bool // a box with size 0 (the final box) was seen
+	src         io.Reader // the underlying reader of br, if seeker is non-nil
+	seeker      io.Seeker // or nil
+	pos         int64     // offset of the next box header
+	lastBox     *box      // or nil
+	noMoreBoxes bool      // a box with size 0 (the final box) was seen
 }
 
 type BoxType [4]byte
@@ -56,6 +63,7 @@ type BoxType [4]byte
 var (
 	TypeFtyp = BoxType{'f', 't', 'y', 'p'}
 	TypeMeta = BoxType{'m', 'e', 't', 'a'}
+	TypeMoov = BoxType{'m', 'o', 'o', 'v'}
 )
 
 func (t BoxType) String() string { return string(t[:]) }
@@ -71,6 +79,14 @@ type parseFunc func(b box, br *bufio.Reader) (Box, error)
 type Box interface {
 	Size() int64 // 0 means unknown (will read to end of file)
 	Type() BoxType
+
+	// Offset returns the offset of the box's header, relative to the
+	// start of the input of the Reader that read the box.
+	Offset() int64
+
+	// HeaderSize returns the size of the box's header, which precedes
+	// the body: 8 bytes, or 16 for boxes with a 64-bit size.
+	HeaderSize() int64
 
 	// Parses parses the box, populating the fields
 	// in the returned concrete type.
@@ -102,11 +118,13 @@ func boxType(s string) BoxType {
 }
 
 var parsers = map[BoxType]parserFunc{
+	boxType("data"): parseDataBox,
 	boxType("dinf"): parseDataInformationBox,
 	boxType("dref"): parseDataReferenceBox,
 	boxType("ftyp"): parseFileTypeBox,
 	boxType("hdlr"): parseHandlerBox,
 	boxType("iinf"): parseItemInfoBox,
+	boxType("ilst"): parseItemListBox,
 	boxType("infe"): parseItemInfoEntry,
 	boxType("iloc"): parseItemLocationBox,
 	boxType("ipco"): parseItemPropertyContainerBox,
@@ -114,20 +132,26 @@ var parsers = map[BoxType]parserFunc{
 	boxType("iprp"): parseItemPropertiesBox,
 	boxType("irot"): parseImageRotation,
 	boxType("ispe"): parseImageSpatialExtentsProperty,
+	boxType("keys"): parseKeysBox,
 	boxType("meta"): parseMetaBox,
+	boxType("mvhd"): parseMovieHeaderBox,
 	boxType("pitm"): parsePrimaryItemBox,
 }
 
 type box struct {
-	size    int64 // 0 means unknown, will read to end of file (box container)
-	boxType BoxType
-	body    io.Reader
-	parsed  Box    // if non-nil, the Parsed result
-	slurp   []byte // if non-nil, the contents slurped to memory
+	size       int64 // 0 means unknown, will read to end of file (box container)
+	boxType    BoxType
+	offset     int64 // of the header, relative to the Reader's input
+	headerSize int64
+	body       io.Reader
+	parsed     Box    // if non-nil, the Parsed result
+	slurp      []byte // if non-nil, the contents slurped to memory
 }
 
-func (b *box) Size() int64   { return b.size }
-func (b *box) Type() BoxType { return b.boxType }
+func (b *box) Size() int64       { return b.size }
+func (b *box) Type() BoxType     { return b.boxType }
+func (b *box) Offset() int64     { return b.offset }
+func (b *box) HeaderSize() int64 { return b.headerSize }
 
 func (b *box) Body() io.Reader {
 	if b.slurp != nil {
@@ -169,7 +193,7 @@ func (r *Reader) ReadBox() (Box, error) {
 		return nil, io.EOF
 	}
 	if r.lastBox != nil {
-		if _, err := io.Copy(ioutil.Discard, r.lastBox.Body()); err != nil {
+		if err := r.skipRest(r.lastBox); err != nil {
 			return nil, err
 		}
 	}
@@ -180,7 +204,9 @@ func (r *Reader) ReadBox() (Box, error) {
 		return nil, err
 	}
 	box := &box{
-		size: int64(binary.BigEndian.Uint32(buf[:4])),
+		size:       int64(binary.BigEndian.Uint32(buf[:4])),
+		offset:     r.pos,
+		headerSize: 8,
 	}
 
 	_, err = io.ReadFull(r.br, box.boxType[:]) // 4 more bytes
@@ -198,6 +224,7 @@ func (r *Reader) ReadBox() (Box, error) {
 			return nil, err
 		}
 		box.size = int64(binary.BigEndian.Uint64(buf[:8]))
+		box.headerSize = 16
 		if box.size < 0 {
 			// Go uses int64 for sizes typically, but BMFF uses uint64.
 			// We assume for now that nobody actually uses boxes larger
@@ -216,11 +243,32 @@ func (r *Reader) ReadBox() (Box, error) {
 	}
 	if box.size > 0 {
 		box.body = io.LimitReader(r.br, remain)
+		r.pos += box.size
 	} else {
 		box.body = r.br
 	}
 	r.lastBox = box
 	return box, nil
+}
+
+// skipRest consumes the unread remainder of b, the most recently read box.
+func (r *Reader) skipRest(b *box) error {
+	lr, ok := b.body.(*io.LimitedReader)
+	if !ok {
+		// A box extending to the end of the input. No boxes follow it.
+		return nil
+	}
+	if buffered := int64(r.br.Buffered()); r.seeker != nil && lr.N > buffered {
+		// The underlying reader is positioned after the buffered bytes.
+		if _, err := r.seeker.Seek(lr.N-buffered, io.SeekCurrent); err == nil {
+			r.br.Reset(r.src)
+			lr.N = 0
+			return nil
+		}
+		// Not actually seekable (e.g. a pipe). Fall back to reading.
+	}
+	_, err := io.Copy(io.Discard, lr)
+	return err
 }
 
 // ReadAndParseBox wraps the ReadBox method, ensuring that the read box is of type typ
@@ -287,10 +335,22 @@ func parseFileTypeBox(outer *box, br *bufReader) (Box, error) {
 
 type MetaBox struct {
 	FullBox
+
+	// QuickTime is whether the box lacks the FullBox version and
+	// flags header, as QuickTime "meta" boxes do. If so, Version and
+	// Flags are zero.
+	QuickTime bool
+
 	Children []Box
 }
 
 func parseMetaBox(outer *box, br *bufReader) (Box, error) {
+	// An ISO BMFF meta box is a FullBox, but a QuickTime one starts
+	// directly with its "hdlr" child box.
+	if buf, err := br.Peek(8); err == nil && string(buf[4:8]) == "hdlr" {
+		mb := &MetaBox{FullBox: FullBox{box: outer}, QuickTime: true}
+		return mb, br.parseAppendBoxes(&mb.Children)
+	}
 	fb, err := readFullBox(outer, br)
 	if err != nil {
 		return nil, err
@@ -313,7 +373,7 @@ func (br *bufReader) parseAppendBoxes(dst *[]Box) error {
 			br.err = err
 			return err
 		}
-		slurp, err := ioutil.ReadAll(inner.Body())
+		slurp, err := io.ReadAll(inner.Body())
 		if err != nil {
 			br.err = err
 			return err
@@ -767,8 +827,14 @@ func parseHandlerBox(gen *box, br *bufReader) (Box, error) {
 	hb.HandlerType = string(buf[4:8])
 	br.Discard(20)
 
-	hb.Name, _ = br.readString()
-	return hb, br.err
+	// The name is null-terminated in ISO BMFF, but QuickTime handler
+	// boxes may omit it entirely or leave it unterminated.
+	name, err := br.ReadString(0)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	hb.Name = strings.TrimSuffix(name, "\x00")
+	return hb, nil
 }
 
 // a "dinf" box

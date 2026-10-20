@@ -46,3 +46,39 @@ func TestMultiReaderAt(t *testing.T) {
 		}
 	}
 }
+
+func TestMultiReaderAtEmptyParts(t *testing.T) {
+	tests := []struct {
+		name    string
+		parts   []string
+		off     int64
+		length  int
+		want    string
+		wantErr error
+	}{
+		{name: "nonempty", parts: []string{"ab", "cd"}, length: 4, want: "abcd"},
+		{name: "middle", parts: []string{"ab", "", "cd"}, length: 4, want: "abcd"},
+		{name: "consecutive", parts: []string{"ab", "", "", "cd"}, length: 4, want: "abcd"},
+		{name: "leading_and_trailing", parts: []string{"", "ab", "cd", ""}, length: 4, want: "abcd"},
+		{name: "offset_across_empty", parts: []string{"ab", "", "", "cde"}, off: 1, length: 3, want: "bcd"},
+		{name: "offset_at_boundary", parts: []string{"ab", "", "", "cd"}, off: 2, length: 2, want: "cd"},
+		{name: "stop_before_empty", parts: []string{"ab", "", "cd"}, length: 2, want: "ab"},
+		{name: "past_end", parts: []string{"ab", "", "cd", ""}, off: 1, length: 4, want: "bcd", wantErr: io.ErrUnexpectedEOF},
+		{name: "all_empty", parts: []string{"", ""}, length: 1, wantErr: io.ErrUnexpectedEOF},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var parts []SizeReaderAt
+			for _, part := range tt.parts {
+				parts = append(parts, strings.NewReader(part))
+			}
+			sra := NewMultiReaderAt(parts...)
+			buf := make([]byte, tt.length)
+			n, err := sra.ReadAt(buf, tt.off)
+			if n != len(tt.want) || err != tt.wantErr || string(buf[:n]) != tt.want {
+				t.Errorf("ReadAt(%d bytes, %d) = %d, %v, %q; want %d, %v, %q",
+					tt.length, tt.off, n, err, buf[:n], len(tt.want), tt.wantErr, tt.want)
+			}
+		})
+	}
+}

@@ -95,6 +95,15 @@ func condPanic(doPanic bool, panicValue interface{}) {
 	}
 }
 
+// nilPanicMessage returns how the running Go version formats the value
+// recovered from panic(nil). Go 1.24 says "panic called with nil
+// argument"; newer versions prefix that with "runtime error: ".
+func nilPanicMessage() (msg string) {
+	defer func() { msg = fmt.Sprint(recover()) }()
+	condPanic(true, nil)
+	return ""
+}
+
 func TestPanic(t *testing.T) {
 	f := New(condPanic)
 	f.Name = "condPanic"
@@ -111,7 +120,7 @@ func TestPanic(t *testing.T) {
 		f.Case("panic with nil").In(true, nil),
 	)
 	want := `LOG: Got res: {Result:[] Panic:boom Panicked:true}
-ERR: panic with nil: condPanic(true, <nil>): panicked with panic called with nil argument
+ERR: panic with nil: condPanic(true, <nil>): panicked with ` + nilPanicMessage() + `
 `
 	if got := trec.String(); got != want {
 		t.Errorf("Output mismatch.\nGot:\n%v\nWant:\n%v\n", got, want)

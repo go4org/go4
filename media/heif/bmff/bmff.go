@@ -130,6 +130,7 @@ var parsers = map[BoxType]parserFunc{
 	boxType("ipco"): parseItemPropertyContainerBox,
 	boxType("ipma"): parseItemPropertyAssociation,
 	boxType("iprp"): parseItemPropertiesBox,
+	boxType("iref"): parseItemReferenceBox,
 	boxType("irot"): parseImageRotation,
 	boxType("ispe"): parseImageSpatialExtentsProperty,
 	boxType("keys"): parseKeysBox,
@@ -168,12 +169,25 @@ func (b *box) Parse() (Box, error) {
 	if !ok {
 		return nil, ErrUnknownBox
 	}
-	v, err := parser(b, &bufReader{Reader: bufio.NewReader(b.Body())})
+	v, err := parser(b, &bufReader{Reader: newBodyReader(b)})
 	if err != nil {
 		return nil, err
 	}
 	b.parsed = v
 	return v, nil
+}
+
+// newBodyReader returns a buffered reader of b's body. HEIF files have
+// many small boxes, such as one "infe" box per item, so the buffer is
+// no larger than a slurped body, but large enough for the parsers'
+// largest Peek.
+func newBodyReader(b *box) *bufio.Reader {
+	const minSize, maxSize = 64, 4096
+	size := maxSize
+	if b.slurp != nil {
+		size = min(max(len(b.slurp), minSize), maxSize)
+	}
+	return bufio.NewReaderSize(b.Body(), size)
 }
 
 type FullBox struct {
@@ -373,7 +387,7 @@ func (br *bufReader) parseAppendBoxes(dst *[]Box) error {
 			br.err = err
 			return err
 		}
-		slurp, err := io.ReadAll(inner.Body())
+		slurp, err := readBody(inner)
 		if err != nil {
 			br.err = err
 			return err
@@ -381,6 +395,24 @@ func (br *bufReader) parseAppendBoxes(dst *[]Box) error {
 		inner.(*box).slurp = slurp
 		*dst = append(*dst, inner)
 	}
+}
+
+// readBody reads all of b's body. If the body is of a known, modest
+// size, it's read into a buffer of that size, rather than growing one.
+// As with io.ReadAll, a body truncated by the end of its input is not
+// an error.
+func readBody(b Box) ([]byte, error) {
+	const maxPrealloc = 1 << 20 // don't trust larger declared sizes
+	n := b.Size() - b.HeaderSize()
+	if b.Size() <= 0 || n > maxPrealloc {
+		return io.ReadAll(b.Body())
+	}
+	buf := make([]byte, n)
+	got, err := io.ReadFull(b.Body(), buf)
+	if err == io.EOF || err == io.ErrUnexpectedEOF {
+		err = nil
+	}
+	return buf[:got], err
 }
 
 // ItemInfoEntry represents an "infe" box.
@@ -736,21 +768,24 @@ type OffsetLength struct {
 
 // not a box
 type ItemLocationBoxEntry struct {
-	ItemID             uint16
-	ConstructionMethod uint8 // actually uint4
+	ItemID             uint32 // 16 bits before version 2
+	ConstructionMethod uint8  // actually uint4
 	DataReferenceIndex uint16
-	BaseOffset         uint64 // uint32 or uint64, depending on encoding
+	BaseOffset         uint64 // 0, 4, or 8 bytes, depending on encoding
 	ExtentCount        uint16
-	Extents            []OffsetLength
+
+	// Extents are relative to BaseOffset. Their extent_index values,
+	// used only by construction method 2, are not retained.
+	Extents []OffsetLength
 }
 
 // box "iloc"
 type ItemLocationBox struct {
 	FullBox
 
-	offsetSize, lengthSize, baseOffsetSize, indexSize uint8 // actually uint4
+	offsetSize, lengthSize, baseOffsetSize, indexSize uint8 // actually uint4, in bytes
 
-	ItemCount uint16
+	ItemCount uint32 // 16 bits before version 2
 	Items     []ItemLocationBoxEntry
 }
 
@@ -769,27 +804,38 @@ func parseItemLocationBox(outer *box, br *bufReader) (Box, error) {
 	ilb.offsetSize = buf[0] >> 4
 	ilb.lengthSize = buf[0] & 15
 	ilb.baseOffsetSize = buf[1] >> 4
-	if fb.Version > 0 { // version 1
+	if fb.Version > 0 { // versions 1 and 2
 		ilb.indexSize = buf[1] & 15
 	}
+	br.Discard(2)
 
-	ilb.ItemCount = binary.BigEndian.Uint16(buf[2:4])
-	br.Discard(4)
+	if fb.Version < 2 {
+		n, _ := br.readUint16()
+		ilb.ItemCount = uint32(n)
+	} else {
+		ilb.ItemCount, _ = br.readUint32()
+	}
 
-	for i := 0; br.ok() && i < int(ilb.ItemCount); i++ {
+	for i := uint32(0); br.ok() && i < ilb.ItemCount; i++ {
 		var ent ItemLocationBoxEntry
-		ent.ItemID, _ = br.readUint16()
-		if fb.Version > 0 { // version 1
+		if fb.Version < 2 {
+			id, _ := br.readUint16()
+			ent.ItemID = uint32(id)
+		} else {
+			ent.ItemID, _ = br.readUint32()
+		}
+		if fb.Version > 0 { // versions 1 and 2
 			cmeth, _ := br.readUint16()
 			ent.ConstructionMethod = byte(cmeth & 15)
 		}
 		ent.DataReferenceIndex, _ = br.readUint16()
-		if br.ok() && ilb.baseOffsetSize > 0 {
-			br.Discard(int(ilb.baseOffsetSize) / 8)
-		}
+		ent.BaseOffset, _ = br.readUintN(ilb.baseOffsetSize * 8)
 		ent.ExtentCount, _ = br.readUint16()
 		for j := 0; br.ok() && j < int(ent.ExtentCount); j++ {
 			var ol OffsetLength
+			if fb.Version > 0 {
+				br.readUintN(ilb.indexSize * 8) // extent_index
+			}
 			ol.Offset, _ = br.readUintN(ilb.offsetSize * 8)
 			ol.Length, _ = br.readUintN(ilb.lengthSize * 8)
 			if br.err != nil {
@@ -868,7 +914,7 @@ func parseDataReferenceBox(gen *box, br *bufReader) (Box, error) {
 // "pitm" box
 type PrimaryItemBox struct {
 	FullBox
-	ItemID uint16
+	ItemID uint32 // 16 bits in version 0
 }
 
 func parsePrimaryItemBox(gen *box, br *bufReader) (Box, error) {
@@ -877,11 +923,64 @@ func parsePrimaryItemBox(gen *box, br *bufReader) (Box, error) {
 		return nil, err
 	}
 	pib := &PrimaryItemBox{FullBox: fb}
-	pib.ItemID, _ = br.readUint16()
+	if fb.Version == 0 {
+		id, _ := br.readUint16()
+		pib.ItemID = uint32(id)
+	} else {
+		pib.ItemID, _ = br.readUint32()
+	}
 	if !br.ok() {
 		return nil, br.err
 	}
 	return pib, nil
+}
+
+// ItemReferenceBox is an "iref" box.
+type ItemReferenceBox struct {
+	FullBox
+	References []ItemReference
+}
+
+// ItemReference is a typed reference from one item to others,
+// such as "thmb" (FromItemID is a thumbnail of ToItemIDs) or
+// "cdsc" (FromItemID describes ToItemIDs). It is not a box.
+type ItemReference struct {
+	Type       BoxType
+	FromItemID uint32
+	ToItemIDs  []uint32
+}
+
+func parseItemReferenceBox(gen *box, br *bufReader) (Box, error) {
+	fb, err := readFullBox(gen, br)
+	if err != nil {
+		return nil, err
+	}
+	irb := &ItemReferenceBox{FullBox: fb}
+	var refs []Box
+	if err := br.parseAppendBoxes(&refs); err != nil {
+		return nil, err
+	}
+	for _, rb := range refs {
+		rr := &bufReader{Reader: bufio.NewReader(rb.Body())}
+		readID := func() uint32 {
+			if fb.Version == 0 {
+				v, _ := rr.readUint16()
+				return uint32(v)
+			}
+			v, _ := rr.readUint32()
+			return v
+		}
+		ref := ItemReference{Type: rb.Type(), FromItemID: readID()}
+		n, _ := rr.readUint16()
+		for i := 0; rr.ok() && i < int(n); i++ {
+			ref.ToItemIDs = append(ref.ToItemIDs, readID())
+		}
+		if !rr.ok() {
+			return nil, fmt.Errorf("error parsing %q item reference: %v", rb.Type(), rr.err)
+		}
+		irb.References = append(irb.References, ref)
+	}
+	return irb, nil
 }
 
 // ImageRotation is a HEIF "irot" rotation property.

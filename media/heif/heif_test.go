@@ -111,3 +111,128 @@ type walkFunc func(exif.FieldName, *tiff.Tag) error
 func (f walkFunc) Walk(name exif.FieldName, tag *tiff.Tag) error {
 	return f(name, tag)
 }
+
+func TestThumbnails(t *testing.T) {
+	src, err := os.ReadFile("testdata/park.heic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := Open(bytes.NewReader(src))
+	primary, err := h.PrimaryItem()
+	if err != nil {
+		t.Fatalf("PrimaryItem: %v", err)
+	}
+	thumbs, err := h.Thumbnails(primary)
+	if err != nil {
+		t.Fatalf("Thumbnails: %v", err)
+	}
+	if len(thumbs) != 1 {
+		t.Fatalf("got %d thumbnails; want 1", len(thumbs))
+	}
+	thumb := thumbs[0]
+	if thumb.ID != 50 || thumb.Info.ItemType != "hvc1" {
+		t.Errorf("thumbnail = item %d, type %q; want item 50, hvc1", thumb.ID, thumb.Info.ItemType)
+	}
+	if w, h, _ := thumb.SpatialExtents(); w != 320 || h != 240 {
+		t.Errorf("thumbnail extents = %dx%d; want 320x240", w, h)
+	}
+	data, err := thumb.Data()
+	if err != nil {
+		t.Fatalf("Data: %v", err)
+	}
+	if ext := thumb.Location.Extents[0]; !bytes.Equal(data, src[ext.Offset:][:ext.Length]) {
+		t.Errorf("Data returned %d bytes not matching its extent %+v", len(data), ext)
+	}
+
+	if tt, err := h.Thumbnails(thumb); err != nil || len(tt) != 0 {
+		t.Errorf("thumbnails of thumbnail = %v, %v; want none", tt, err)
+	}
+	if _, err := h.StandaloneHEIF(primary); err == nil {
+		t.Error("StandaloneHEIF of grid item succeeded; want error")
+	}
+
+	standalone, err := h.StandaloneHEIF(thumb)
+	if err != nil {
+		t.Fatalf("StandaloneHEIF: %v", err)
+	}
+	sh := Open(bytes.NewReader(standalone))
+	sp, err := sh.PrimaryItem()
+	if err != nil {
+		t.Fatalf("standalone PrimaryItem: %v", err)
+	}
+	if sp.Info.ItemType != "hvc1" {
+		t.Errorf("standalone primary type = %q; want hvc1", sp.Info.ItemType)
+	}
+	if len(sp.Properties) != len(thumb.Properties) {
+		t.Fatalf("standalone has %d properties; want %d", len(sp.Properties), len(thumb.Properties))
+	}
+	for i, p := range sp.Properties {
+		if p.Type() != thumb.Properties[i].Type() {
+			t.Errorf("standalone property %d = %q; want %q", i, p.Type(), thumb.Properties[i].Type())
+		}
+	}
+	tw, th, _ := thumb.VisualDimensions()
+	if w, h, _ := sp.VisualDimensions(); w != tw || h != th {
+		t.Errorf("standalone visual dimensions = %dx%d; want %dx%d", w, h, tw, th)
+	}
+	if sp.Rotations() != thumb.Rotations() {
+		t.Errorf("standalone Rotations = %d; want %d", sp.Rotations(), thumb.Rotations())
+	}
+	sdata, err := sp.Data()
+	if err != nil {
+		t.Fatalf("standalone Data: %v", err)
+	}
+	if !bytes.Equal(sdata, data) {
+		t.Error("standalone item data differs from original")
+	}
+	if _, err := sh.EXIF(); err != ErrNoEXIF {
+		t.Errorf("standalone EXIF error = %v; want ErrNoEXIF", err)
+	}
+}
+
+// BenchmarkThumbnail measures finding and reading a primary image's
+// thumbnail as a standalone HEIF file.
+func BenchmarkThumbnail(b *testing.B) {
+	name := "testdata/park.heic"
+	if v := os.Getenv("HEIF_BENCH_FILE"); v != "" {
+		name = v
+	}
+	src, err := os.ReadFile(name)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		h := Open(bytes.NewReader(src))
+		primary, err := h.PrimaryItem()
+		if err != nil {
+			b.Fatal(err)
+		}
+		thumbs, err := h.Thumbnails(primary)
+		if err != nil || len(thumbs) == 0 {
+			b.Fatalf("Thumbnails = %v, %v", thumbs, err)
+		}
+		if _, err := h.StandaloneHEIF(thumbs[0]); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestDataTruncated(t *testing.T) {
+	f, err := os.Open("testdata/rotate.heic") // truncated within its thumbnail
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	h := Open(f)
+	thumb, err := h.ItemByID(50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := thumb.Data(); err == nil {
+		t.Error("Data succeeded; want error")
+	}
+	if _, err := h.StandaloneHEIF(thumb); err == nil {
+		t.Error("StandaloneHEIF succeeded; want error")
+	}
+}

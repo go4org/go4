@@ -328,3 +328,96 @@ func FuzzParse(f *testing.F) {
 		parseAll(NewReader(bytes.NewReader(in)), 0)
 	})
 }
+
+func u16(v uint16) []byte { return binary.BigEndian.AppendUint16(nil, v) }
+
+func TestItemLocationBox(t *testing.T) {
+	tests := []struct {
+		name string
+		box  []byte
+		want []ItemLocationBoxEntry
+	}{
+		{
+			name: "v0_base_offset",
+			// 4 byte offsets and lengths, 4 byte base offset.
+			box: mkbox("iloc", fullHeader(0), []byte{0x44, 0x40}, u16(2),
+				u16(7), u16(0), u32(1000), u16(1), u32(10), u32(20),
+				u16(8), u16(0), u32(0), u16(2), u32(30), u32(40), u32(70), u32(5)),
+			want: []ItemLocationBoxEntry{
+				{ItemID: 7, BaseOffset: 1000, ExtentCount: 1, Extents: []OffsetLength{{10, 20}}},
+				{ItemID: 8, ExtentCount: 2, Extents: []OffsetLength{{30, 40}, {70, 5}}},
+			},
+		},
+		{
+			name: "v1_index_and_method",
+			// 4 byte offsets, 8 byte lengths, 8 byte base offset, 4 byte index.
+			box: mkbox("iloc", fullHeader(1), []byte{0x48, 0x84}, u16(1),
+				u16(9), u16(1), u16(0), u64(1<<33), u16(1), u32(99), u32(3), u64(4)),
+			want: []ItemLocationBoxEntry{
+				{ItemID: 9, ConstructionMethod: 1, BaseOffset: 1 << 33, ExtentCount: 1, Extents: []OffsetLength{{3, 4}}},
+			},
+		},
+		{
+			name: "v2_32bit_ids",
+			box: mkbox("iloc", fullHeader(2), []byte{0x44, 0x00}, u32(1),
+				u32(1<<20), u16(0), u16(0), u16(1), u32(5), u32(6)),
+			want: []ItemLocationBoxEntry{
+				{ItemID: 1 << 20, ExtentCount: 1, Extents: []OffsetLength{{5, 6}}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			boxes := readBoxes(t, NewReader(bytes.NewReader(tt.box)))
+			ilb := parse(t, boxes[0]).(*ItemLocationBox)
+			if int(ilb.ItemCount) != len(tt.want) || !reflect.DeepEqual(ilb.Items, tt.want) {
+				t.Errorf("items = %+v; want %+v", ilb.Items, tt.want)
+			}
+		})
+	}
+}
+
+func TestItemReferenceBox(t *testing.T) {
+	v0 := mkbox("iref", fullHeader(0),
+		mkbox("thmb", u16(50), u16(1), u16(49)),
+		mkbox("dimg", u16(49), u16(3), u16(1), u16(2), u16(3)),
+		mkbox("cdsc", u16(51), u16(0)))
+	v1 := mkbox("iref", fullHeader(1), mkbox("thmb", u32(1<<20), u16(1), u32(1<<21)))
+	for _, tt := range []struct {
+		name string
+		box  []byte
+		want []ItemReference
+	}{
+		{"v0", v0, []ItemReference{
+			{boxType("thmb"), 50, []uint32{49}},
+			{boxType("dimg"), 49, []uint32{1, 2, 3}},
+			{boxType("cdsc"), 51, nil},
+		}},
+		{"v1", v1, []ItemReference{{boxType("thmb"), 1 << 20, []uint32{1 << 21}}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			boxes := readBoxes(t, NewReader(bytes.NewReader(tt.box)))
+			irb := parse(t, boxes[0]).(*ItemReferenceBox)
+			if !reflect.DeepEqual(irb.References, tt.want) {
+				t.Errorf("references = %+v; want %+v", irb.References, tt.want)
+			}
+		})
+	}
+
+	truncated := mkbox("iref", fullHeader(0), mkbox("thmb", u16(50), u16(2), u16(49)))
+	r := NewReader(bytes.NewReader(truncated))
+	b, err := r.ReadBox()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Parse(); err == nil {
+		t.Error("Parse of truncated iref succeeded; want error")
+	}
+}
+
+func TestPrimaryItemBoxV1(t *testing.T) {
+	boxes := readBoxes(t, NewReader(bytes.NewReader(mkbox("pitm", fullHeader(1), u32(1<<20)))))
+	if got := parse(t, boxes[0]).(*PrimaryItemBox).ItemID; got != 1<<20 {
+		t.Errorf("ItemID = %d; want %d", got, 1<<20)
+	}
+}

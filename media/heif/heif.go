@@ -22,10 +22,13 @@ limitations under the License.
 package heif
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math"
+	"slices"
 
 	"go4.org/media/heif/bmff"
 )
@@ -44,12 +47,13 @@ type File struct {
 
 // BoxMeta contains the low-level BMFF metadata boxes.
 type BoxMeta struct {
-	FileType     *bmff.FileTypeBox
-	Handler      *bmff.HandlerBox
-	PrimaryItem  *bmff.PrimaryItemBox
-	ItemInfo     *bmff.ItemInfoBox
-	Properties   *bmff.ItemPropertiesBox
-	ItemLocation *bmff.ItemLocationBox
+	FileType      *bmff.FileTypeBox
+	Handler       *bmff.HandlerBox
+	PrimaryItem   *bmff.PrimaryItemBox
+	ItemInfo      *bmff.ItemInfoBox
+	Properties    *bmff.ItemPropertiesBox
+	ItemLocation  *bmff.ItemLocationBox
+	ItemReference *bmff.ItemReferenceBox // or nil
 }
 
 // EXIFItemID returns the item ID of the EXIF part, or 0 if not found.
@@ -149,13 +153,203 @@ func (f *File) EXIF() ([]byte, error) {
 	if offLen.Length > maxSize {
 		return nil, fmt.Errorf("heif: declared EXIF size %d exceeds threshold of %d bytes", offLen.Length, maxSize)
 	}
+	if offLen.Length < 4 {
+		return nil, fmt.Errorf("heif: declared EXIF size %d is too small", offLen.Length)
+	}
 	buf := make([]byte, offLen.Length-4)
-	n, err := f.ra.ReadAt(buf, int64(offLen.Offset)+4) // TODO: why 4? did I miss something?
+	// The EXIF item starts with a 4 byte offset to the TIFF header,
+	// which is skipped here.
+	n, err := f.ra.ReadAt(buf, int64(it.Location.BaseOffset+offLen.Offset)+4)
 	if err != nil {
 		log.Printf("Read %d bytes + %v: %q", n, err, buf)
 		return nil, err
 	}
 	return buf, nil
+}
+
+// MaxItemDataSize is the largest item that Item.Data and
+// File.StandaloneHEIF read into memory.
+const MaxItemDataSize = 64 << 20
+
+// Data returns the item's bytes, such as an image item's coded data.
+// It supports only items stored in the file itself, in one or more
+// extents (construction method 0 with the default data reference),
+// of at most MaxItemDataSize bytes in total.
+func (it *Item) Data() ([]byte, error) {
+	loc := it.Location
+	if loc == nil {
+		return nil, fmt.Errorf("heif: item %d has no location", it.ID)
+	}
+	if loc.ConstructionMethod != 0 || loc.DataReferenceIndex != 0 {
+		return nil, fmt.Errorf("heif: item %d uses unsupported construction method %d, data reference %d",
+			it.ID, loc.ConstructionMethod, loc.DataReferenceIndex)
+	}
+	if len(loc.Extents) == 0 {
+		return nil, fmt.Errorf("heif: item %d has no extents", it.ID)
+	}
+	var total uint64
+	for _, e := range loc.Extents {
+		// A zero length means the rest of the file, which
+		// isn't supported.
+		if e.Length == 0 || e.Length > MaxItemDataSize-total {
+			return nil, fmt.Errorf("heif: item %d has unsupported extent length %d", it.ID, e.Length)
+		}
+		total += e.Length
+	}
+	buf := make([]byte, 0, total)
+	for _, e := range loc.Extents {
+		off := loc.BaseOffset + e.Offset
+		if off < loc.BaseOffset || off > math.MaxInt64 {
+			return nil, fmt.Errorf("heif: item %d has invalid extent offset", it.ID)
+		}
+		part := buf[len(buf) : len(buf)+int(e.Length)]
+		if _, err := it.f.ra.ReadAt(part, int64(off)); err != nil {
+			return nil, fmt.Errorf("heif: reading item %d: %w", it.ID, err)
+		}
+		buf = buf[:len(buf)+len(part)]
+	}
+	return buf, nil
+}
+
+// Thumbnails returns the thumbnail items of it: the items with a "thmb"
+// reference to it, in file order. It returns no items and a nil error
+// if there are none.
+func (f *File) Thumbnails(it *Item) ([]*Item, error) {
+	meta, err := f.getMeta()
+	if err != nil {
+		return nil, err
+	}
+	if meta.ItemReference == nil {
+		return nil, nil
+	}
+	var thumbs []*Item
+	for _, ref := range meta.ItemReference.References {
+		if !ref.Type.EqualString("thmb") || !slices.Contains(ref.ToItemIDs, it.ID) {
+			continue
+		}
+		thumb, err := f.ItemByID(ref.FromItemID)
+		if err != nil {
+			return nil, err
+		}
+		thumbs = append(thumbs, thumb)
+	}
+	return thumbs, nil
+}
+
+// StandaloneHEIF returns a minimal HEIF file whose primary and only
+// item is a copy of it, including its data and associated properties
+// (such as decoder configuration, spatial extents, and rotation).
+// This lets HEIF decoders that only decode a file's primary image
+// decode another item, such as a thumbnail.
+//
+// It only supports coded image items stored per Item.Data, not derived
+// images (such as "grid") that reference other items.
+func (f *File) StandaloneHEIF(it *Item) ([]byte, error) {
+	meta, err := f.getMeta()
+	if err != nil {
+		return nil, err
+	}
+	switch it.Info.ItemType {
+	case "grid", "iden", "iovl", "Exif", "mime", "uri ":
+		return nil, fmt.Errorf("heif: can't make standalone HEIF of %q item %d", it.Info.ItemType, it.ID)
+	}
+	data, err := it.Data()
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > math.MaxUint32 {
+		return nil, fmt.Errorf("heif: item %d is too large", it.ID)
+	}
+	var props []bmff.Box
+	var ipma []byte // association entries after the count
+	for _, ass := range f.propertyAssociations(it.ID) {
+		if ass.Index == 0 || int(ass.Index) > len(meta.Properties.PropertyContainer.Properties) {
+			continue
+		}
+		props = append(props, meta.Properties.PropertyContainer.Properties[ass.Index-1])
+		v := byte(len(props))
+		if ass.Essential {
+			v |= 0x80
+		}
+		ipma = append(ipma, v)
+	}
+	if len(props) > 0x7f {
+		return nil, fmt.Errorf("heif: item %d has too many properties", it.ID)
+	}
+
+	const id = 1 // the standalone item's ID
+	ftyp := []byte(f.majorBrand())
+	ftyp = append(ftyp, 0, 0, 0, 0) // minor version
+	ftyp = append(ftyp, "mif1"...)
+	ftyp = append(ftyp, f.majorBrand()...)
+
+	hdlr := make([]byte, 4+4+4+12+1) // version/flags, pre_defined, type, reserved, name
+	copy(hdlr[8:], "pict")
+	pitm := binary.BigEndian.AppendUint16(make([]byte, 4), id)
+
+	infe := []byte{2, 0, 0, 0} // version 2
+	infe = binary.BigEndian.AppendUint16(infe, id)
+	infe = binary.BigEndian.AppendUint16(infe, 0) // protection index
+	infe = append(infe, it.Info.ItemType...)
+	infe = append(infe, 0) // empty name
+	iinf := binary.BigEndian.AppendUint16(make([]byte, 4), 1)
+	iinf = appendBox(iinf, "infe", infe)
+
+	var ipco []byte
+	for _, p := range props {
+		body, err := io.ReadAll(p.Body())
+		if err != nil {
+			return nil, err
+		}
+		ipco = appendBox(ipco, p.Type().String(), body)
+	}
+	assoc := binary.BigEndian.AppendUint32(make([]byte, 4), 1) // version 0, 8-bit indexes; 1 entry
+	assoc = binary.BigEndian.AppendUint16(assoc, id)
+	assoc = append(assoc, byte(len(ipma)))
+	assoc = append(assoc, ipma...)
+	iprp := appendBox(nil, "ipco", ipco)
+	iprp = appendBox(iprp, "ipma", assoc)
+
+	// buildMeta returns the meta box, locating the item's data at off.
+	buildMeta := func(off uint32) []byte {
+		iloc := []byte{0, 0, 0, 0, 0x44, 0x00} // version 0; 4 byte offsets & lengths; no base offset
+		iloc = binary.BigEndian.AppendUint16(iloc, 1)
+		iloc = binary.BigEndian.AppendUint16(iloc, id)
+		iloc = binary.BigEndian.AppendUint16(iloc, 0) // data reference index
+		iloc = binary.BigEndian.AppendUint16(iloc, 1) // extent count
+		iloc = binary.BigEndian.AppendUint32(iloc, off)
+		iloc = binary.BigEndian.AppendUint32(iloc, uint32(len(data)))
+
+		body := make([]byte, 4) // version & flags
+		body = appendBox(body, "hdlr", hdlr)
+		body = appendBox(body, "pitm", pitm)
+		body = appendBox(body, "iinf", iinf)
+		body = appendBox(body, "iloc", iloc)
+		body = appendBox(body, "iprp", iprp)
+		return appendBox(nil, "meta", body)
+	}
+	out := appendBox(nil, "ftyp", ftyp)
+	dataOff := len(out) + len(buildMeta(0)) + 8 // mdat header
+	if uint64(dataOff)+uint64(len(data)) > math.MaxUint32 {
+		return nil, fmt.Errorf("heif: item %d is too large", it.ID)
+	}
+	out = append(out, buildMeta(uint32(dataOff))...)
+	return appendBox(out, "mdat", data), nil
+}
+
+// majorBrand returns the file's major brand, or "heic" if unknown.
+func (f *File) majorBrand() string {
+	if f.meta != nil && f.meta.FileType != nil && len(f.meta.FileType.MajorBrand) == 4 {
+		return f.meta.FileType.MajorBrand
+	}
+	return "heic"
+}
+
+// appendBox appends a box of type typ and the given body to dst.
+func appendBox(dst []byte, typ string, body []byte) []byte {
+	dst = binary.BigEndian.AppendUint32(dst, uint32(8+len(body)))
+	dst = append(dst, typ...)
+	return append(dst, body...)
 }
 
 func (f *File) setMetaErr(err error) error {
@@ -209,6 +403,8 @@ func (f *File) getMeta() (*BoxMeta, error) {
 			meta.Properties = v
 		case *bmff.ItemLocationBox:
 			meta.ItemLocation = v
+		case *bmff.ItemReferenceBox:
+			meta.ItemReference = v
 		}
 	}
 
@@ -257,36 +453,47 @@ func (f *File) ItemByID(id uint32) (*Item, error) {
 	if it.Info == nil {
 		return nil, ErrUnknownItem
 	}
-	if meta.Properties != nil {
-		allProps := meta.Properties.PropertyContainer.Properties
-		for _, ipa := range meta.Properties.Associations {
-			// TODO: I've never seen a file with more than
-			// top-level ItemPropertyAssociation box, but
-			// apparently they can exist with different
-			// versions/flags. For now we just merge them
-			// all together, but that's not really right.
-			// So for now, just bail once a previous loop
-			// found anything.
-			if len(it.Properties) > 0 {
-				break
-			}
+	for _, ass := range f.propertyAssociations(id) {
+		box := meta.Properties.PropertyContainer.Properties[ass.Index-1]
+		boxp, err := box.Parse()
+		if err == nil {
+			box = boxp
+		}
+		it.Properties = append(it.Properties, box)
+	}
+	return it, nil
+}
 
-			for _, ipai := range ipa.Entries {
-				if ipai.ItemID != id {
-					continue
-				}
-				for _, ass := range ipai.Associations {
-					if ass.Index != 0 && int(ass.Index) <= len(allProps) {
-						box := allProps[ass.Index-1]
-						boxp, err := box.Parse()
-						if err == nil {
-							box = boxp
-						}
-						it.Properties = append(it.Properties, box)
-					}
+// propertyAssociations returns item id's property associations,
+// in order, omitting any with invalid property indexes.
+func (f *File) propertyAssociations(id uint32) []bmff.ItemProperty {
+	if f.meta == nil || f.meta.Properties == nil {
+		return nil
+	}
+	allProps := f.meta.Properties.PropertyContainer.Properties
+	var asses []bmff.ItemProperty
+	for _, ipa := range f.meta.Properties.Associations {
+		// TODO: I've never seen a file with more than
+		// top-level ItemPropertyAssociation box, but
+		// apparently they can exist with different
+		// versions/flags. For now we just merge them
+		// all together, but that's not really right.
+		// So for now, just bail once a previous loop
+		// found anything.
+		if len(asses) > 0 {
+			break
+		}
+
+		for _, ipai := range ipa.Entries {
+			if ipai.ItemID != id {
+				continue
+			}
+			for _, ass := range ipai.Associations {
+				if ass.Index != 0 && int(ass.Index) <= len(allProps) {
+					asses = append(asses, ass)
 				}
 			}
 		}
 	}
-	return it, nil
+	return asses
 }

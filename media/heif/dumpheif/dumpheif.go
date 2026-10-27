@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	exifItemID uint16
+	exifItemID uint32
 	exifLoc    bmff.ItemLocationBoxEntry
 )
 
@@ -149,7 +149,7 @@ func dumpBox(box bmff.Box, depth int) {
 	case *bmff.ItemInfoEntry:
 		fmt.Printf("%s- %T, %+v\n", indent, v, v)
 		if v.ItemType == "Exif" {
-			exifItemID = v.ItemID
+			exifItemID = uint32(v.ItemID)
 		}
 	case *bmff.ItemPropertiesBox:
 		fmt.Printf("%s- %T\n", indent, v)

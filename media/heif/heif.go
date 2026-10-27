@@ -257,9 +257,6 @@ func (f *File) StandaloneHEIF(it *Item) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(data) > math.MaxUint32 {
-		return nil, fmt.Errorf("heif: item %d is too large", it.ID)
-	}
 	var props []bmff.Box
 	var ipma []byte // association entries after the count
 	for _, ass := range f.propertyAssociations(it.ID) {

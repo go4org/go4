@@ -3,7 +3,9 @@ package heif
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rwcarlsen/goexif/exif"
@@ -234,5 +236,83 @@ func TestDataTruncated(t *testing.T) {
 	}
 	if _, err := h.StandaloneHEIF(thumb); err == nil {
 		t.Error("StandaloneHEIF succeeded; want error")
+	}
+}
+
+func TestEncodeImage(t *testing.T) {
+	hvcC := Property{Box: appendBox(nil, "hvcC", []byte{1, 2, 3}), Essential: true}
+	data := []byte("coded image data")
+	b, err := EncodeImage("heic", "hvc1", []Property{hvcC, SpatialExtents(1920, 1440), Rotation(3)}, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := Open(bytes.NewReader(b))
+	it, err := h.PrimaryItem()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if it.Info.ItemType != "hvc1" {
+		t.Errorf("item type = %q; want hvc1", it.Info.ItemType)
+	}
+	var types []string
+	for _, p := range it.Properties {
+		types = append(types, p.Type().String())
+	}
+	if got, want := strings.Join(types, ","), "hvcC,ispe,irot"; got != want {
+		t.Fatalf("properties = %s; want %s", got, want)
+	}
+	// Each property's box comes back byte for byte.
+	for i, want := range [][]byte{hvcC.Box, SpatialExtents(1920, 1440).Box, Rotation(3).Box} {
+		body, err := io.ReadAll(it.Properties[i].Body())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := appendBox(nil, it.Properties[i].Type().String(), body); !bytes.Equal(got, want) {
+			t.Errorf("property %d = %x; want %x", i, got, want)
+		}
+	}
+	if w, h, ok := it.SpatialExtents(); !ok || w != 1920 || h != 1440 {
+		t.Errorf("SpatialExtents = %d, %d, %v; want 1920, 1440, true", w, h, ok)
+	}
+	if r := it.Rotations(); r != 3 {
+		t.Errorf("Rotations = %d; want 3", r)
+	}
+	if w, h, _ := it.VisualDimensions(); w != 1440 || h != 1920 {
+		t.Errorf("VisualDimensions = %dx%d; want 1440x1920", w, h)
+	}
+	got, err := it.Data()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Errorf("Data = %q; want %q", got, data)
+	}
+	meta, err := h.getMeta()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.FileType.MajorBrand != "heic" {
+		t.Errorf("major brand = %q; want heic", meta.FileType.MajorBrand)
+	}
+	for i, ass := range h.propertyAssociations(it.ID) {
+		if want := i != 1; ass.Essential != want { // all but ispe
+			t.Errorf("property %d essential = %v; want %v", i, ass.Essential, want)
+		}
+	}
+
+	for _, tt := range []struct {
+		name            string
+		brand, itemType string
+		props           []Property
+	}{
+		{"brand", "hei", "hvc1", nil},
+		{"item type", "heic", "hvc", nil},
+		{"short box", "heic", "hvc1", []Property{{Box: []byte{0, 0, 0, 4}}}},
+		{"box size", "heic", "hvc1", []Property{{Box: appendBox(nil, "hvcC", nil)[:7]}}},
+		{"too many", "heic", "hvc1", make([]Property, 128)},
+	} {
+		if _, err := EncodeImage(tt.brand, tt.itemType, tt.props, data); err == nil {
+			t.Errorf("EncodeImage with invalid %s succeeded; want error", tt.name)
+		}
 	}
 }

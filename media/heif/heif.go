@@ -257,28 +257,78 @@ func (f *File) StandaloneHEIF(it *Item) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var props []bmff.Box
-	var ipma []byte // association entries after the count
+	var props []Property
 	for _, ass := range f.propertyAssociations(it.ID) {
 		if ass.Index == 0 || int(ass.Index) > len(meta.Properties.PropertyContainer.Properties) {
 			continue
 		}
-		props = append(props, meta.Properties.PropertyContainer.Properties[ass.Index-1])
-		v := byte(len(props))
-		if ass.Essential {
+		p := meta.Properties.PropertyContainer.Properties[ass.Index-1]
+		body, err := io.ReadAll(p.Body())
+		if err != nil {
+			return nil, err
+		}
+		props = append(props, Property{Box: appendBox(nil, p.Type().String(), body), Essential: ass.Essential})
+	}
+	return EncodeImage(f.majorBrand(), it.Info.ItemType, props, data)
+}
+
+// Property is an item property for EncodeImage.
+type Property struct {
+	// Box is the complete property box, including its header.
+	Box []byte
+
+	// Essential is whether decoders must support the property to
+	// decode the item, such as for decoder configurations and
+	// transformations.
+	Essential bool
+}
+
+// SpatialExtents returns an "ispe" property of an image's width and
+// height in pixels, before any transformations such as rotation.
+func SpatialExtents(width, height uint32) Property {
+	body := make([]byte, 4) // version & flags
+	body = binary.BigEndian.AppendUint32(body, width)
+	body = binary.BigEndian.AppendUint32(body, height)
+	return Property{Box: appendBox(nil, "ispe", body)}
+}
+
+// Rotation returns an essential "irot" property, rotating an image by
+// the given number of quarter turns counterclockwise for display,
+// modulo 4.
+func Rotation(quarterTurns int) Property {
+	return Property{Box: appendBox(nil, "irot", []byte{byte(quarterTurns & 3)}), Essential: true}
+}
+
+// EncodeImage returns a minimal HEIF file of major brand brand (such as
+// "heic") whose primary and only item is a coded image of itemType (such
+// as "hvc1"), with the given properties and coded data. The properties
+// typically include the item's decoder configuration (such as "hvcC")
+// and SpatialExtents.
+func EncodeImage(brand, itemType string, props []Property, data []byte) ([]byte, error) {
+	if len(brand) != 4 || len(itemType) != 4 {
+		return nil, fmt.Errorf("heif: invalid brand %q or item type %q", brand, itemType)
+	}
+	if len(props) > 0x7f {
+		return nil, errors.New("heif: too many item properties")
+	}
+	var ipco, ipma []byte // ipma: association entries after the count
+	for i, p := range props {
+		if len(p.Box) < 8 || binary.BigEndian.Uint32(p.Box) != uint32(len(p.Box)) {
+			return nil, fmt.Errorf("heif: item property %d isn't a box", i)
+		}
+		ipco = append(ipco, p.Box...)
+		v := byte(i + 1) // 1-based index
+		if p.Essential {
 			v |= 0x80
 		}
 		ipma = append(ipma, v)
 	}
-	if len(props) > 0x7f {
-		return nil, fmt.Errorf("heif: item %d has too many properties", it.ID)
-	}
 
-	const id = 1 // the standalone item's ID
-	ftyp := []byte(f.majorBrand())
+	const id = 1 // the item's ID
+	ftyp := []byte(brand)
 	ftyp = append(ftyp, 0, 0, 0, 0) // minor version
 	ftyp = append(ftyp, "mif1"...)
-	ftyp = append(ftyp, f.majorBrand()...)
+	ftyp = append(ftyp, brand...)
 
 	hdlr := make([]byte, 4+4+4+12+1) // version/flags, pre_defined, type, reserved, name
 	copy(hdlr[8:], "pict")
@@ -287,19 +337,11 @@ func (f *File) StandaloneHEIF(it *Item) ([]byte, error) {
 	infe := []byte{2, 0, 0, 0} // version 2
 	infe = binary.BigEndian.AppendUint16(infe, id)
 	infe = binary.BigEndian.AppendUint16(infe, 0) // protection index
-	infe = append(infe, it.Info.ItemType...)
+	infe = append(infe, itemType...)
 	infe = append(infe, 0) // empty name
 	iinf := binary.BigEndian.AppendUint16(make([]byte, 4), 1)
 	iinf = appendBox(iinf, "infe", infe)
 
-	var ipco []byte
-	for _, p := range props {
-		body, err := io.ReadAll(p.Body())
-		if err != nil {
-			return nil, err
-		}
-		ipco = appendBox(ipco, p.Type().String(), body)
-	}
 	assoc := binary.BigEndian.AppendUint32(make([]byte, 4), 1) // version 0, 8-bit indexes; 1 entry
 	assoc = binary.BigEndian.AppendUint16(assoc, id)
 	assoc = append(assoc, byte(len(ipma)))
@@ -328,7 +370,7 @@ func (f *File) StandaloneHEIF(it *Item) ([]byte, error) {
 	out := appendBox(nil, "ftyp", ftyp)
 	dataOff := len(out) + len(buildMeta(0)) + 8 // mdat header
 	if uint64(dataOff)+uint64(len(data)) > math.MaxUint32 {
-		return nil, fmt.Errorf("heif: item %d is too large", it.ID)
+		return nil, errors.New("heif: image data is too large")
 	}
 	out = append(out, buildMeta(uint32(dataOff))...)
 	return appendBox(out, "mdat", data), nil
